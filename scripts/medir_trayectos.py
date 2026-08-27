@@ -37,18 +37,38 @@ def main() -> None:
     estaciones = {e["stop_id"]: e["nombre"] for e in cat["estaciones"]}
     n = len(estaciones)
 
+    # Formato compacto del catálogo: cada trip es una lista y las paradas van en la
+    # posición 4. Se lee el índice desde 'formato_trips' en vez de codificarlo a fuego,
+    # para que un cambio de formato no rompa esto en silencio.
+    formato = cat.get("formato_trips", [])
+    idx_stops = formato.index("stop_ids") if "stop_ids" in formato else 4
+
     # Pares (origen, destino) ORDENADOS cubiertos por algún tren directo.
     # Ordenados porque ir de A a B no implica que exista servicio de B a A.
     pares_directos: set[tuple[str, str]] = set()
     trenes_por_parada: dict[str, int] = defaultdict(int)
 
+    # Muchos trips repiten exactamente el mismo recorrido en distintos días de servicio.
+    # Se cachean los patrones ya procesados: evita repetir el cálculo de pares millones
+    # de veces sin cambiar el resultado.
+    patrones_vistos: set[tuple[str, ...]] = set()
+
     for trip in cat["trips"]:
-        ids = [p["stop_id"] for p in trip["paradas"]]
+        ids = trip[idx_stops]
         for sid in ids:
             trenes_por_parada[sid] += 1
+
+        patron = tuple(ids)
+        if patron in patrones_vistos:
+            continue
+        patrones_vistos.add(patron)
+
         # Todo par (i, j) con i antes que j en el recorrido es un trayecto directo.
         for i, j in combinations(range(len(ids)), 2):
             pares_directos.add((ids[i], ids[j]))
+
+    print(f"Recorridos distintos: {len(patrones_vistos):,} "
+          f"(de {len(cat['trips']):,} trips)")
 
     posibles = n * (n - 1)
     cobertura = len(pares_directos) / posibles if posibles else 0.0

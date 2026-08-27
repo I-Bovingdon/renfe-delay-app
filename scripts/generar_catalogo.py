@@ -126,12 +126,10 @@ def main() -> None:
         if rid in rutas_madrid:
             trips_madrid[t["trip_id"]] = {
                 "trip_id": t["trip_id"],
-                "route_id": rid,
                 "line_id": rutas_madrid[rid]["line_id"],
                 "service_id": t.get("service_id", ""),
-                "direction_id": t.get("direction_id", "0"),
+                "direction_id": int(t.get("direction_id", "0") or 0),
                 "shape_id": t.get("shape_id", ""),
-                "headsign": t.get("trip_headsign", ""),
                 "paradas": [],
             }
     print(f"Trips del núcleo Madrid: {len(trips_madrid)}")
@@ -262,16 +260,48 @@ def main() -> None:
     print(f"Servicios en calendar.txt: {len(servicios)} · "
           f"con excepciones: {len(excepciones)}")
 
-    # --- 7. Escritura ------------------------------------------------------------------
+    # --- 7. Formato compacto de trips ---------------------------------------------------
+    # Un JSON con un diccionario por parada repite el nombre de cada clave ~564.000 veces.
+    # Con listas paralelas se guardan los mismos datos sin repetir claves: el fichero baja
+    # a menos de la mitad y, sobre todo, la huella en memoria del proceso de la API cae
+    # drásticamente (el servicio va limitado a 512 MB para no poner en riesgo la captura).
+    #
+    # Formato de cada trip:
+    #   [trip_id, line_id, service_id, direction_id, [stop_id...], [llegada_s...], [salida_s...]]
+    # Las tres listas van alineadas por posición y ya ordenadas por stop_sequence, así que
+    # la secuencia es el propio índice y no hace falta almacenarla.
+    IDX_TRIP_ID, IDX_LINE, IDX_SERVICIO, IDX_SENTIDO = 0, 1, 2, 3
+    IDX_STOPS, IDX_LLEGADAS, IDX_SALIDAS = 4, 5, 6
+
+    trips_compactos = []
+    for trip in trips_madrid.values():
+        paradas = trip["paradas"]
+        trips_compactos.append(
+            [
+                trip["trip_id"],
+                trip["line_id"],
+                trip["service_id"],
+                trip["direction_id"],
+                [p["stop_id"] for p in paradas],
+                [p["llegada_s"] for p in paradas],
+                [p["salida_s"] for p in paradas],
+            ]
+        )
+
+    # --- 8. Escritura ------------------------------------------------------------------
     catalogo = {
         "gtfs_version": gtfs_version,
         "generado_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "nucleo": "10 (Madrid)",
+        "formato_trips": [
+            "trip_id", "line_id", "service_id", "direction_id",
+            "stop_ids", "llegadas_s", "salidas_s",
+        ],
         "estaciones": estaciones,
         "lineas": lineas,
         "servicios": servicios,
         "excepciones": dict(excepciones),
-        "trips": list(trips_madrid.values()),
+        "trips": trips_compactos,
     }
     with open(args.salida, "w", encoding="utf-8") as f:
         json.dump(catalogo, f, ensure_ascii=False, separators=(",", ":"))
@@ -279,7 +309,9 @@ def main() -> None:
     import os
     mb = os.path.getsize(args.salida) / 1_048_576
     print(f"\n✔ Catálogo escrito en {args.salida} ({mb:.1f} MB)")
-    print(f"  {len(estaciones)} estaciones · {len(lineas)} líneas · {len(trips_madrid)} trips")
+    print(f"  {len(estaciones)} estaciones · {len(lineas)} líneas · {len(trips_compactos)} trips")
+    dias = len({t["service_id"] for t in trips_madrid.values()})
+    print(f"  {dias} service_id distintos · ~{len(trips_compactos) // 29} trenes/día")
 
 
 if __name__ == "__main__":
