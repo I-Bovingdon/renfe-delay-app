@@ -127,7 +127,7 @@ class Predictor:
         self.backend_nombre = (backend or os.getenv("PREDICTOR_BACKEND", "stub")).lower()
 
         if self.backend_nombre == "stub":
-            url = os.getenv("STUB_URL", "http://127.0.0.1:8501/invocations")
+            url = os.getenv("STUB_URL", "http://127.0.0.1:8601/invocations")
             self._backend: Any = _BackendHTTP(url, nombre="stub")
 
         elif self.backend_nombre == "local":
