@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cercanías Madrid · Hora estimada de llegada</title>
+<meta name="description" content="Predicción de la hora de llegada de los trenes de Cercanías de Madrid.">
+<meta name="theme-color" content="#101826">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+
+<!--
+  La pantalla de consulta ES un diagrama de línea: origen y destino no son dos campos
+  apilados, son dos puntos unidos por una vía vertical. El botón de intercambiar va
+  montado sobre la propia vía.
+-->
+
+<header class="cabecera">
+  <p class="eyebrow">Cercanías Madrid</p>
+  <h1 class="titulo">¿A qué hora<br>llegas?</h1>
+</header>
+
+<main class="lienzo">
+
+  <!-- ============================ CONSULTA ============================ -->
+  <section class="panel" id="panel-consulta" aria-labelledby="titulo-consulta">
+    <h2 class="oculto" id="titulo-consulta">Elige tu trayecto</h2>
+
+    <div class="trayecto">
+      <div class="parada parada--origen">
+        <span class="punto" aria-hidden="true"></span>
+        <div class="campo">
+          <label class="campo__etiqueta" for="origen">Desde</label>
+          <input class="campo__entrada" id="origen" type="text" autocomplete="off"
+                 role="combobox" aria-expanded="false" aria-controls="sugerencias-origen"
+                 aria-autocomplete="list" placeholder="Estación de origen">
+          <ul class="sugerencias" id="sugerencias-origen" role="listbox" hidden></ul>
+        </div>
+      </div>
+
+      <button class="intercambiar" id="intercambiar" type="button" title="Intercambiar origen y destino">
+        <span class="oculto">Intercambiar origen y destino</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M7 4v13M7 4 4 7.5M7 4l3 3.5M17 20V7M17 20l3-3.5M17 20l-3-3.5"/>
+        </svg>
+      </button>
+
+      <div class="parada parada--destino">
+        <span class="punto" aria-hidden="true"></span>
+        <div class="campo">
+          <label class="campo__etiqueta" for="destino">Hasta</label>
+          <input class="campo__entrada" id="destino" type="text" autocomplete="off"
+                 role="combobox" aria-expanded="false" aria-controls="sugerencias-destino"
+                 aria-autocomplete="list" placeholder="Estación de destino">
+          <ul class="sugerencias" id="sugerencias-destino" role="listbox" hidden></ul>
+        </div>
+      </div>
+    </div>
+
+    <fieldset class="salida">
+      <legend class="campo__etiqueta">Salgo</legend>
+      <div class="fichas" id="fichas">
+        <button class="ficha ficha--activa" type="button" data-min="0">Ahora</button>
+        <button class="ficha" type="button" data-min="15">+15 min</button>
+        <button class="ficha" type="button" data-min="30">+30 min</button>
+        <button class="ficha" type="button" data-min="60">+1 h</button>
+      </div>
+      <input class="hora-manual" id="hora-manual" type="time" aria-label="O elige una hora concreta">
+    </fieldset>
+
+    <button class="accion" id="buscar" type="button">Ver trenes</button>
+    <p class="pie-consulta" id="pie-consulta"></p>
+  </section>
+
+  <!-- ============================ RESULTADO ============================ -->
+  <section class="panel panel--resultado" id="panel-resultado" hidden
+           aria-labelledby="titulo-resultado" aria-live="polite">
+    <header class="resultado__cabecera">
+      <h2 class="titulo-seccion" id="titulo-resultado">Próximos trenes</h2>
+      <p class="leyenda">
+        La hora grande es la <strong>llegada estimada</strong> a tu destino: horario
+        oficial más el retraso previsto. Debajo, el margen en el que se espera el tren.
+      </p>
+    </header>
+
+    <div id="resultados"></div>
+
+    <p class="nota-degradada" id="nota-degradada" hidden></p>
+  </section>
+
+  <!-- Estados: cargando, sin resultados, error -->
+  <section class="panel panel--estado" id="panel-cargando" hidden aria-live="polite">
+    <div class="esqueleto"></div>
+    <div class="esqueleto esqueleto--corto"></div>
+    <p class="estado__texto">Consultando trenes y calculando retrasos</p>
+  </section>
+
+  <section class="panel panel--estado" id="panel-aviso" hidden role="status">
+    <p class="estado__titulo" id="aviso-titulo"></p>
+    <p class="estado__texto" id="aviso-texto"></p>
+  </section>
+
+</main>
+
+<footer class="pie">
+  <p>Trabajo Fin de Máster · Data Science, Big Data &amp; Business Analytics · UCM</p>
+  <p class="pie__dato" id="pie-version"></p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,546 @@
+/* =============================================================================
+   estilos.css — Interfaz de predicción de retrasos · Cercanías Madrid
+
+   DIRECCIÓN DE DISEÑO
+   El objeto del que parte todo es el diagrama de línea: la tira que llevan los
+   trenes dentro del vagón con las estaciones como puntos ensartados en una línea
+   de color. El formulario ES ese diagrama.
+
+   La aplicación no tiene color de marca propio: toma el color de la línea en la
+   que vas a viajar (--linea), que viene del GTFS. Hasta que eliges trayecto, la
+   interfaz es tinta sobre papel.
+
+   Tipografía de señalética pública (Barlow / Barlow Condensed) y monoespaciada
+   con cifras tabulares para los tiempos, que son datos y deben alinearse.
+   ============================================================================= */
+
+:root {
+  /* --- Paleta ------------------------------------------------------------ */
+  --tinta:   #101826;   /* azul muy oscuro; texto principal y fondo del pie   */
+  --papel:   #f7f8fa;   /* blanco frío del fondo                              */
+  --carta:   #ffffff;   /* superficie de los paneles                          */
+  --niebla:  #e3e7ed;   /* vías, bordes y separadores                         */
+  --gris:    #5b6676;   /* texto secundario                                   */
+
+  /* Color de la línea del trayecto. Lo fija app.js con el dato del GTFS.
+     Mientras no hay trayecto elegido, la interfaz va en tinta. */
+  --linea: var(--tinta);
+
+  /* --- Tipografía -------------------------------------------------------- */
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --texto:   "Barlow", system-ui, sans-serif;
+  --dato:    "IBM Plex Mono", ui-monospace, monospace;
+
+  /* --- Ritmo ------------------------------------------------------------- */
+  --u: 8px;
+  --radio: 14px;
+  --ancho: 34rem;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  padding: 0 calc(var(--u) * 2) calc(var(--u) * 6);
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--texto);
+  font-size: 16px;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.oculto {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+:focus-visible {
+  outline: 3px solid var(--linea);
+  outline-offset: 2px;
+}
+
+/* ============================== CABECERA ================================= */
+.cabecera {
+  width: 100%;
+  max-width: var(--ancho);
+  padding: calc(var(--u) * 5) 0 calc(var(--u) * 3);
+}
+
+.eyebrow {
+  margin: 0 0 var(--u);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gris);
+}
+
+.titulo {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(2.8rem, 12vw, 4.2rem);
+  line-height: 0.92;
+  letter-spacing: -0.01em;
+}
+
+/* ================================ PANELES ================================ */
+.lienzo {
+  width: 100%;
+  max-width: var(--ancho);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 2);
+}
+
+.panel {
+  background: var(--carta);
+  border: 1px solid var(--niebla);
+  border-radius: var(--radio);
+  padding: calc(var(--u) * 3);
+}
+
+.titulo-seccion {
+  margin: 0 0 calc(var(--u) * 2);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gris);
+}
+
+/* =========================== DIAGRAMA DE LÍNEA ===========================
+   La vía es un pseudoelemento vertical que une los dos puntos. El botón de
+   intercambiar se monta encima de ella, como un apartadero.                  */
+.trayecto {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 2.5);
+}
+
+.trayecto::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 22px;
+  bottom: 22px;
+  width: 2px;
+  background: var(--niebla);
+  border-radius: 2px;
+}
+
+.parada {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--u) * 2);
+}
+
+.punto {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin-top: 20px;
+  border-radius: 50%;
+  background: var(--carta);
+  border: 3px solid var(--linea);
+  transition: border-color 0.25s ease;
+}
+
+/* El destino se marca lleno: es donde termina el viaje y donde se predice. */
+.parada--destino .punto { background: var(--linea); }
+
+.campo { flex: 1 1 auto; position: relative; min-width: 0; }
+
+.campo__etiqueta {
+  display: block;
+  margin-bottom: 2px;
+  padding: 0;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gris);
+}
+
+.campo__entrada {
+  width: 100%;
+  padding: calc(var(--u) * 0.75) 0;
+  border: 0;
+  border-bottom: 2px solid var(--niebla);
+  border-radius: 0;
+  background: transparent;
+  color: var(--tinta);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.5rem;
+  transition: border-color 0.2s ease;
+}
+
+.campo__entrada::placeholder { color: #aab2bf; font-weight: 500; }
+.campo__entrada:focus { outline: none; border-bottom-color: var(--linea); }
+
+.intercambiar {
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--niebla);
+  border-radius: 50%;
+  background: var(--carta);
+  color: var(--gris);
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.intercambiar svg {
+  width: 15px; height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.intercambiar:hover {
+  color: var(--linea);
+  border-color: var(--linea);
+  transform: translateY(-50%) rotate(180deg);
+}
+
+/* ============================= SUGERENCIAS =============================== */
+.sugerencias {
+  position: absolute;
+  z-index: 5;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: var(--u) 0 0;
+  padding: calc(var(--u) * 0.5);
+  list-style: none;
+  background: var(--carta);
+  border: 1px solid var(--niebla);
+  border-radius: calc(var(--radio) - 4px);
+  box-shadow: 0 12px 28px rgba(16, 24, 38, 0.12);
+  max-height: 15rem;
+  overflow-y: auto;
+}
+
+.sugerencia {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--u);
+  padding: calc(var(--u) * 1.25);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.sugerencia:hover,
+.sugerencia[aria-selected="true"] { background: var(--papel); }
+
+.sugerencia__nombre { font-weight: 500; }
+
+.insignias { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.insignia {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--niebla);
+  color: var(--tinta);
+  font-family: var(--dato);
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+/* ================================ SALIDA ================================= */
+.salida {
+  margin: calc(var(--u) * 4) 0 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--u);
+}
+
+.salida .campo__etiqueta { width: 100%; }
+
+.fichas { display: flex; flex-wrap: wrap; gap: var(--u); }
+
+.ficha {
+  padding: calc(var(--u) * 0.75) calc(var(--u) * 1.75);
+  border: 1px solid var(--niebla);
+  border-radius: 999px;
+  background: var(--carta);
+  color: var(--gris);
+  font-family: var(--texto);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.ficha:hover { border-color: var(--gris); color: var(--tinta); }
+
+.ficha--activa {
+  border-color: var(--tinta);
+  background: var(--tinta);
+  color: var(--carta);
+}
+
+.hora-manual {
+  padding: calc(var(--u) * 0.75) var(--u);
+  border: 1px solid var(--niebla);
+  border-radius: 999px;
+  background: var(--carta);
+  color: var(--tinta);
+  font-family: var(--dato);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ================================ ACCIÓN ================================= */
+.accion {
+  width: 100%;
+  margin-top: calc(var(--u) * 3);
+  padding: calc(var(--u) * 2);
+  border: 0;
+  border-radius: 10px;
+  background: var(--tinta);
+  color: var(--carta);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.15rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.accion:hover { opacity: 0.88; }
+.accion:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.pie-consulta {
+  min-height: 1.2rem;
+  margin: var(--u) 0 0;
+  font-size: 0.85rem;
+  color: var(--gris);
+}
+
+/* ================================ ESTADOS ================================ */
+.estado__titulo {
+  margin: 0 0 calc(var(--u) * 0.5);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.3rem;
+}
+
+.estado__texto { margin: 0; color: var(--gris); font-size: 0.95rem; }
+
+.esqueleto {
+  height: 46px;
+  margin-bottom: var(--u);
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--papel) 25%, var(--niebla) 50%, var(--papel) 75%);
+  background-size: 200% 100%;
+  animation: carga 1.4s ease-in-out infinite;
+}
+
+.esqueleto--corto { width: 62%; margin-bottom: calc(var(--u) * 2); }
+
+@keyframes carga {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* ============================== RESULTADOS ===============================
+   Jerarquía: el dato que el usuario ha venido a buscar es la HORA DE LLEGADA.
+   Va en grande. El retraso en minutos y el margen de confianza la explican,
+   pero no compiten con ella.                                                 */
+
+.resultado__cabecera { margin-bottom: calc(var(--u) * 2); }
+.resultado__cabecera .titulo-seccion { margin-bottom: var(--u); }
+
+.leyenda {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--gris);
+}
+
+.leyenda strong { color: var(--tinta); font-weight: 600; }
+
+.tren {
+  padding: calc(var(--u) * 2.5) 0;
+  border-top: 1px solid var(--niebla);
+}
+
+.tren:first-child { border-top: 0; padding-top: 0; }
+
+/* --- Primera fila: línea, salida y paradas ------------------------------- */
+.tren__origen {
+  display: flex;
+  align-items: center;
+  gap: var(--u);
+  margin-bottom: var(--u);
+  font-size: 0.9rem;
+  color: var(--gris);
+}
+
+.tren__linea {
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--linea);
+  color: #fff;
+  font-family: var(--dato);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.tren__salida {
+  font-family: var(--dato);
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+  font-weight: 500;
+}
+
+/* --- Segunda fila: la hora de llegada, que es la respuesta --------------- */
+.tren__principal {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--u);
+  flex-wrap: wrap;
+}
+
+.tren__llegada {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(2.6rem, 11vw, 3.4rem);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tren__llegada-etiqueta {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gris);
+}
+
+/* --- Semáforo: nunca solo color; siempre icono y texto ------------------- */
+.retraso {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: calc(var(--u) * 0.6) calc(var(--u) * 1.25);
+  border: 1px solid;
+  border-radius: 999px;
+  font-family: var(--dato);
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.retraso--puntual { color: #14663d; border-color: #b6e0c8; background: #eefaf3; }
+.retraso--leve    { color: #8a5200; border-color: #f0d5a8; background: #fdf6e8; }
+.retraso--alto    { color: #97231f; border-color: #f0bcb9; background: #fdeeed; }
+
+.retraso__icono { font-size: 0.9em; }
+
+/* --- Margen de llegada: banda p10-p90 con marca en la mediana ------------ */
+.margen { margin-top: calc(var(--u) * 2); }
+
+.margen__pista {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--papel);
+  border: 1px solid var(--niebla);
+  overflow: hidden;
+}
+
+.margen__banda {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--linea);
+  opacity: 0.28;
+}
+
+.margen__mediana {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--linea);
+}
+
+.margen__etiquetas {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-family: var(--dato);
+  font-size: 0.75rem;
+  color: var(--gris);
+  font-variant-numeric: tabular-nums;
+}
+
+.nota-degradada {
+  margin: calc(var(--u) * 2) 0 0;
+  padding: calc(var(--u) * 1.5);
+  border-radius: 8px;
+  background: var(--papel);
+  border: 1px solid var(--niebla);
+  font-size: 0.82rem;
+  color: var(--gris);
+}
+
+/* ================================== PIE ================================== */
+.pie {
+  width: 100%;
+  max-width: var(--ancho);
+  margin-top: calc(var(--u) * 5);
+  color: var(--gris);
+  font-size: 0.78rem;
+}
+
+.pie p { margin: 0 0 4px; }
+.pie__dato { font-family: var(--dato); font-size: 0.72rem; }
+
+/* ============================ ACCESIBILIDAD ============================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
