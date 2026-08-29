@@ -9,7 +9,7 @@
 cercanias-madrid.es, www.cercanias-madrid.es {
 
 	# Correo para los avisos de Let's Encrypt (caducidad, problemas de renovación).
-	tls ismael@cercanias-madrid.es
+	tls predictrenfe@gmail.com
 
 	# La API escucha solo en local; Caddy es el único que habla con el exterior.
 	reverse_proxy 127.0.0.1:8000
