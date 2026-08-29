@@ -1,0 +1,35 @@
+[Unit]
+# Simulador del modelo. PROVISIONAL: se sustituye por inferencia local con
+# mlflow.pyfunc cuando el modelo real esté registrado (previsto para el 07/09).
+# Se despliega como servicio propio para que la sustitución sea un cambio de
+# variable de entorno en tfm-app y no una reescritura.
+Description=TFM Cercanías - Stub del modelo de predicción
+After=network-online.target
+
+[Service]
+Type=simple
+User=tfm
+Group=tfm
+WorkingDirectory=/home/tfm/renfe-delay-app/api
+
+ExecStart=/home/tfm/renfe-delay-app/.venv/bin/python serving_stub.py \
+    --host 127.0.0.1 --port 8601
+
+Restart=always
+RestartSec=5
+
+# El stub apenas consume: devuelve números sintéticos. Límites muy holgados
+# respecto a lo que necesita, pero acotados igualmente.
+MemoryMax=200M
+CPUQuota=25%
+Nice=10
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

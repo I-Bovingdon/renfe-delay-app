@@ -1,0 +1,53 @@
+[Unit]
+# API de la interfaz de predicción de retrasos.
+# Servicio INDEPENDIENTE de los colectores: la captura 24/7 es irrenunciable y
+# un fallo de la aplicación no puede afectarla de ninguna manera.
+Description=TFM Cercanías - API de predicción de retrasos
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tfm
+Group=tfm
+WorkingDirectory=/home/tfm/renfe-delay-app/api
+
+# Variables de entorno (backend del predictor, rutas, tokens si algún día hay).
+# El fichero vive fuera del repositorio y con permisos 600: NUNCA en git.
+EnvironmentFile=/home/tfm/renfe-delay-app/.env
+
+# Escucha SOLO en la interfaz local. Quien habla con el exterior es Caddy, que
+# es quien tiene el certificado. Exponer uvicorn directamente a internet sería
+# publicar un servidor de desarrollo sin TLS.
+ExecStart=/home/tfm/renfe-delay-app/.venv/bin/uvicorn main:app \
+    --host 127.0.0.1 --port 8000 --workers 1 --log-level info
+
+Restart=always
+RestartSec=5
+
+# --- Límites de recursos ---------------------------------------------------
+# MemoryHigh es un freno: a partir de ahí el kernel presiona al proceso para que
+# libere memoria, pero no lo mata. MemoryMax sí lo mata. Tener los dos da margen
+# de reacción en lugar de un corte seco.
+# El catálogo GTFS ocupa ~116 MB medidos, más el intérprete y uvicorn.
+MemoryHigh=400M
+MemoryMax=600M
+
+# Media CPU como techo. La máquina tiene 2 vCPU: así, aunque la app se dispare,
+# siempre queda una libre para los colectores.
+CPUQuota=50%
+
+# Los colectores tienen prioridad sobre la aplicación si compiten.
+Nice=10
+
+# --- Endurecimiento --------------------------------------------------------
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=false
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

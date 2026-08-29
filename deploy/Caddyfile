@@ -1,0 +1,37 @@
+# Caddyfile — proxy inverso con HTTPS automático.
+#
+# Caddy obtiene y renueva solo el certificado de Let's Encrypt. Por eso el
+# puerto 80 tiene que estar abierto aunque todo el tráfico acabe en HTTPS:
+# es por donde se hace la validación del dominio.
+#
+# Destino: /etc/caddy/Caddyfile
+
+cercanias-madrid.es, www.cercanias-madrid.es {
+
+	# Correo para los avisos de Let's Encrypt (caducidad, problemas de renovación).
+	tls ismael@cercanias-madrid.es
+
+	# La API escucha solo en local; Caddy es el único que habla con el exterior.
+	reverse_proxy 127.0.0.1:8000
+
+	encode gzip zstd
+
+	header {
+		# HSTS: el navegador recuerda que este dominio va por HTTPS y no vuelve
+		# a intentar HTTP. Evita el aviso de seguridad en la defensa.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# La cabecera del servidor no aporta nada y sí da pistas a quien escanea.
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/cercanias.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+		format console
+	}
+}
