@@ -125,7 +125,7 @@ app = FastAPI(
 # mientras se desarrolla; en F6 se restringe al dominio real.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+        allow_origins=["https://cercanias-madrid.es", "https://www.cercanias-madrid.es"],
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
