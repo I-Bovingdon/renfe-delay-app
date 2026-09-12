@@ -15,99 +15,169 @@
 </head>
 <body>
 
-<!--
-  La pantalla de consulta ES un diagrama de línea: origen y destino no son dos campos
-  apilados, son dos puntos unidos por una vía vertical. El botón de intercambiar va
-  montado sobre la propia vía.
--->
-
 <header class="cabecera">
   <p class="eyebrow">
-    <img class="logo-cercanias" src="data:image/png;base64,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" alt="Cercanías" width="24" height="24">
+    <img class="logo-cercanias" src="data:image/png;base64,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" alt="Cercanías" width="24" height="24">
     Cercanías Madrid
   </p>
-  <h1 class="titulo">Llegada estimada</h1>
+  <h1 class="titulo" id="titulo-pantalla">Llegada estimada</h1>
+
+  <nav class="nav" aria-label="Secciones">
+    <button class="nav__item nav__item--activo" data-pantalla="llegada" type="button">
+      Llegada
+    </button>
+    <button class="nav__item" data-pantalla="alertas" type="button">
+      Alertas<span class="nav__badge" id="badge-alertas" hidden>0</span>
+    </button>
+    <button class="nav__item nav__item--deshabilitado" data-pantalla="mapa" type="button" disabled>
+      Mapa
+    </button>
+  </nav>
 </header>
 
 <main class="lienzo">
 
-  <!-- ============================ CONSULTA ============================ -->
-  <section class="panel" id="panel-consulta" aria-labelledby="titulo-consulta">
-    <h2 class="oculto" id="titulo-consulta">Elige tu trayecto</h2>
+  <!-- ======================== PANTALLA: LLEGADA ======================== -->
+  <div class="pantalla" id="pantalla-llegada">
 
-    <div class="trayecto">
-      <div class="parada parada--origen">
-        <span class="punto" aria-hidden="true"></span>
-        <div class="campo">
-          <label class="campo__etiqueta" for="origen">Desde</label>
-          <input class="campo__entrada" id="origen" type="text" autocomplete="off"
-                 role="combobox" aria-expanded="false" aria-controls="sugerencias-origen"
-                 aria-autocomplete="list" placeholder="Estación de origen">
-          <ul class="sugerencias" id="sugerencias-origen" role="listbox" hidden></ul>
+    <section class="panel" id="panel-consulta" aria-labelledby="titulo-consulta">
+      <h2 class="oculto" id="titulo-consulta">Elige tu trayecto</h2>
+
+      <div class="trayecto">
+        <div class="parada parada--origen">
+          <span class="punto" aria-hidden="true"></span>
+          <div class="campo">
+            <label class="campo__etiqueta" for="origen">Desde</label>
+            <input class="campo__entrada" id="origen" type="text" autocomplete="off"
+                   role="combobox" aria-expanded="false" aria-controls="sugerencias-origen"
+                   aria-autocomplete="list" placeholder="Estación de origen">
+            <ul class="sugerencias" id="sugerencias-origen" role="listbox" hidden></ul>
+          </div>
+        </div>
+
+        <button class="intercambiar" id="intercambiar" type="button" title="Intercambiar origen y destino">
+          <span class="oculto">Intercambiar origen y destino</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M7 4v13M7 4 4 7.5M7 4l3 3.5M17 20V7M17 20l3-3.5M17 20l-3-3.5"/>
+          </svg>
+        </button>
+
+        <div class="parada parada--destino">
+          <span class="punto" aria-hidden="true"></span>
+          <div class="campo">
+            <label class="campo__etiqueta" for="destino">Hasta</label>
+            <input class="campo__entrada" id="destino" type="text" autocomplete="off"
+                   role="combobox" aria-expanded="false" aria-controls="sugerencias-destino"
+                   aria-autocomplete="list" placeholder="Estación de destino">
+            <ul class="sugerencias" id="sugerencias-destino" role="listbox" hidden></ul>
+          </div>
         </div>
       </div>
 
-      <button class="intercambiar" id="intercambiar" type="button" title="Intercambiar origen y destino">
-        <span class="oculto">Intercambiar origen y destino</span>
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M7 4v13M7 4 4 7.5M7 4l3 3.5M17 20V7M17 20l3-3.5M17 20l-3-3.5"/>
-        </svg>
+      <fieldset class="salida">
+        <legend class="campo__etiqueta">Salgo</legend>
+        <div class="fichas" id="fichas">
+          <button class="ficha ficha--activa" type="button" data-min="0">Ahora</button>
+          <button class="ficha" type="button" data-min="15">+15 min</button>
+          <button class="ficha" type="button" data-min="30">+30 min</button>
+          <button class="ficha" type="button" data-min="60">+1 h</button>
+        </div>
+        <input class="hora-manual" id="hora-manual" type="time" aria-label="O elige una hora concreta">
+      </fieldset>
+
+      <button class="accion" id="buscar" type="button">Ver trenes</button>
+      <p class="pie-consulta" id="pie-consulta"></p>
+    </section>
+
+    <section class="panel panel--resultado" id="panel-resultado" hidden
+             aria-labelledby="titulo-resultado" aria-live="polite">
+      <header class="resultado__cabecera">
+        <h2 class="titulo-seccion" id="titulo-resultado">Próximos trenes</h2>
+        <p class="leyenda">
+          La hora grande es la <strong>llegada estimada</strong> a tu destino: horario
+          oficial más el retraso previsto. Debajo, el margen en el que se espera el tren.
+        </p>
+      </header>
+      <div id="resultados"></div>
+      <p class="nota-degradada" id="nota-degradada" hidden></p>
+
+      <!-- Enlace contextual a alertas desde el resultado -->
+      <button class="enlace-alertas" id="ver-alertas-trayecto" type="button" hidden>
+        <span class="enlace-alertas__icono" aria-hidden="true">⚠</span>
+        <span class="enlace-alertas__texto" id="enlace-alertas-texto"></span>
       </button>
+    </section>
 
-      <div class="parada parada--destino">
-        <span class="punto" aria-hidden="true"></span>
-        <div class="campo">
-          <label class="campo__etiqueta" for="destino">Hasta</label>
-          <input class="campo__entrada" id="destino" type="text" autocomplete="off"
-                 role="combobox" aria-expanded="false" aria-controls="sugerencias-destino"
-                 aria-autocomplete="list" placeholder="Estación de destino">
-          <ul class="sugerencias" id="sugerencias-destino" role="listbox" hidden></ul>
-        </div>
-      </div>
+    <section class="panel panel--estado" id="panel-cargando" hidden aria-live="polite">
+      <div class="esqueleto"></div>
+      <div class="esqueleto esqueleto--corto"></div>
+      <p class="estado__texto">Consultando trenes y calculando retrasos</p>
+    </section>
+
+    <section class="panel panel--estado" id="panel-aviso" hidden role="status">
+      <p class="estado__titulo" id="aviso-titulo"></p>
+      <p class="estado__texto" id="aviso-texto"></p>
+    </section>
+
+  </div><!-- /pantalla-llegada -->
+
+  <!-- ======================== PANTALLA: ALERTAS ======================== -->
+  <div class="pantalla" id="pantalla-alertas" hidden>
+
+    <!-- Aviso de feed degradado o caduco -->
+    <div class="aviso-feed" id="aviso-feed" role="alert" hidden>
+      <p class="aviso-feed__texto" id="aviso-feed-texto"></p>
     </div>
 
-    <fieldset class="salida">
-      <legend class="campo__etiqueta">Salgo</legend>
-      <div class="fichas" id="fichas">
-        <button class="ficha ficha--activa" type="button" data-min="0">Ahora</button>
-        <button class="ficha" type="button" data-min="15">+15 min</button>
-        <button class="ficha" type="button" data-min="30">+30 min</button>
-        <button class="ficha" type="button" data-min="60">+1 h</button>
-      </div>
-      <input class="hora-manual" id="hora-manual" type="time" aria-label="O elige una hora concreta">
-    </fieldset>
+    <!-- Filtros por línea -->
+    <div class="filtros-linea" id="filtros-linea" hidden>
+      <button class="filtro filtro--activo" data-linea="" type="button">Todas</button>
+    </div>
 
-    <button class="accion" id="buscar" type="button">Ver trenes</button>
-    <p class="pie-consulta" id="pie-consulta"></p>
-  </section>
+    <!-- Incidencias activas -->
+    <section class="panel" id="panel-alertas-activas" hidden>
+      <h2 class="titulo-seccion">Incidencias activas</h2>
+      <div id="lista-activas"></div>
+    </section>
 
-  <!-- ============================ RESULTADO ============================ -->
-  <section class="panel panel--resultado" id="panel-resultado" hidden
-           aria-labelledby="titulo-resultado" aria-live="polite">
-    <header class="resultado__cabecera">
-      <h2 class="titulo-seccion" id="titulo-resultado">Próximos trenes</h2>
-      <p class="leyenda">
-        La hora grande es la <strong>llegada estimada</strong> a tu destino: horario
-        oficial más el retraso previsto. Debajo, el margen en el que se espera el tren.
-      </p>
-    </header>
+    <!-- Resueltas hoy -->
+    <section class="panel" id="panel-alertas-resueltas" hidden>
+      <h2 class="titulo-seccion alerta-seccion--resuelta">Resueltas hoy</h2>
+      <div id="lista-resueltas"></div>
+    </section>
 
-    <div id="resultados"></div>
+    <!-- Accesibilidad -->
+    <section class="panel" id="panel-accesibilidad" hidden>
+      <button class="plegable" id="toggle-accesibilidad" type="button"
+              aria-expanded="false" aria-controls="lista-accesibilidad">
+        <span class="titulo-seccion">Accesibilidad</span>
+        <span class="plegable__flecha" aria-hidden="true">▾</span>
+      </button>
+      <div id="lista-accesibilidad" hidden></div>
+    </section>
 
-    <p class="nota-degradada" id="nota-degradada" hidden></p>
-  </section>
+    <!-- Cargando alertas -->
+    <section class="panel panel--estado" id="panel-alertas-cargando" aria-live="polite">
+      <div class="esqueleto"></div>
+      <div class="esqueleto esqueleto--corto"></div>
+      <p class="estado__texto">Cargando incidencias</p>
+    </section>
 
-  <!-- Estados: cargando, sin resultados, error -->
-  <section class="panel panel--estado" id="panel-cargando" hidden aria-live="polite">
-    <div class="esqueleto"></div>
-    <div class="esqueleto esqueleto--corto"></div>
-    <p class="estado__texto">Consultando trenes y calculando retrasos</p>
-  </section>
+    <!-- Sin incidencias -->
+    <section class="panel panel--estado" id="panel-sin-alertas" hidden>
+      <p class="estado__titulo">Sin incidencias</p>
+      <p class="estado__texto" id="sin-alertas-texto">No se han registrado incidencias hoy en la red.</p>
+    </section>
 
-  <section class="panel panel--estado" id="panel-aviso" hidden role="status">
-    <p class="estado__titulo" id="aviso-titulo"></p>
-    <p class="estado__texto" id="aviso-texto"></p>
-  </section>
+  </div><!-- /pantalla-alertas -->
+
+  <!-- ======================== PANTALLA: MAPA =========================== -->
+  <div class="pantalla" id="pantalla-mapa" hidden>
+    <section class="panel panel--estado">
+      <p class="estado__titulo">Mapa de la red</p>
+      <p class="estado__texto">Próximamente: estado en tiempo real de cada línea.</p>
+    </section>
+  </div>
 
 </main>
 

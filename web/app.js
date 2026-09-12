@@ -17,6 +17,8 @@ const estado = {
   destino: null,
   offsetMin: 0,        // minutos desde ahora, según la ficha elegida
   horaManual: null,    // "HH:MM" si el usuario fija una hora concreta
+  lineasConsulta: [],   // líneas del último resultado, para filtrar alertas
+  pantallaActiva: "llegada",
 };
 
 const $ = (id) => document.getElementById(id);
@@ -31,8 +33,6 @@ function instanteSalida() {
     const [h, m] = estado.horaManual.split(":").map(Number);
     const cuando = new Date();
     cuando.setHours(h, m, 0, 0);
-    // Si la hora elegida ya pasó hace rato, se entiende que es de mañana.
-    // Sin esto, pedir "las 07:30" a las 21:00 no devolvería ningún tren.
     if (cuando.getTime() < Date.now() - 3 * 3600 * 1000) {
       cuando.setDate(cuando.getDate() + 1);
     }
@@ -46,6 +46,11 @@ function comoHora(fecha) {
   return fecha.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
 }
 
+/** ISO con zona -> "07:12". Sin parsear a Date para evitar problemas de TZ. */
+function horaDeISO(iso) {
+  return iso ? iso.slice(11, 16) : "";
+}
+
 /** Pinta la interfaz con el color de la línea del trayecto. */
 function aplicarColorDeLinea(color) {
   document.documentElement.style.setProperty("--linea", color || "var(--tinta)");
@@ -56,14 +61,51 @@ function mostrar(id, visible) {
 }
 
 // ---------------------------------------------------------------------------
+// Navegación entre pantallas
+// ---------------------------------------------------------------------------
+
+const TITULOS = {
+  llegada: "Llegada estimada",
+  alertas: "Incidencias",
+  mapa: "Estado de la red",
+};
+
+function irA(pantalla) {
+  if (pantalla === estado.pantallaActiva) return;
+
+  // Ocultar la pantalla anterior, mostrar la nueva
+  $(`pantalla-${estado.pantallaActiva}`).hidden = true;
+  $(`pantalla-${pantalla}`).hidden = false;
+
+  // Actualizar los tabs
+  document.querySelectorAll(".nav__item").forEach((btn) => {
+    btn.classList.toggle("nav__item--activo", btn.dataset.pantalla === pantalla);
+  });
+
+  // Actualizar el título
+  $("titulo-pantalla").textContent = TITULOS[pantalla] || "";
+
+  estado.pantallaActiva = pantalla;
+
+  // Al entrar en alertas, cargar y arrancar el sondeo
+  if (pantalla === "alertas") {
+    cargarAlertas();
+    iniciarSondeo();
+  } else {
+    pararSondeo();
+  }
+}
+
+document.querySelector(".nav").addEventListener("click", (ev) => {
+  const btn = ev.target.closest(".nav__item");
+  if (!btn || btn.disabled) return;
+  irA(btn.dataset.pantalla);
+});
+
+// ---------------------------------------------------------------------------
 // Autocompletado de estaciones
 // ---------------------------------------------------------------------------
 
-/**
- * Conecta un campo de texto con su lista de sugerencias.
- * Implementa el patrón combobox: flechas para moverse, Enter para elegir,
- * Escape para cerrar. Sin esto no se puede usar con teclado.
- */
 function montarBuscador(idEntrada, idLista, clave) {
   const entrada = $(idEntrada);
   const lista = $(idLista);
@@ -87,7 +129,6 @@ function montarBuscador(idEntrada, idLista, clave) {
     estado[clave] = estacion;
     entrada.value = estacion.nombre;
     cerrar();
-    // Si ambos extremos comparten una sola línea, ya se puede vestir la interfaz.
     const otro = clave === "origen" ? estado.destino : estado.origen;
     if (otro) {
       const comunes = estacion.lineas.filter((l) => otro.lineas.includes(l));
@@ -103,7 +144,7 @@ function montarBuscador(idEntrada, idLista, clave) {
       if (!resp.ok) throw new Error(resp.status);
       opciones = await resp.json();
     } catch {
-      return cerrar(); // Un fallo del autocompletado no debe romper el formulario.
+      return cerrar();
     }
 
     if (!opciones.length) return cerrar();
@@ -120,7 +161,7 @@ function montarBuscador(idEntrada, idLista, clave) {
 
     lista.querySelectorAll(".sugerencia").forEach((li, i) => {
       li.addEventListener("mousedown", (ev) => {
-        ev.preventDefault(); // evita que el blur cierre la lista antes del clic
+        ev.preventDefault();
         elegir(opciones[i]);
       });
     });
@@ -175,7 +216,6 @@ function pintarSegunLinea(lineId) {
   aplicarColorDeLinea(coloresLinea[lineId]);
 }
 
-/** Color de una línea, con un gris de reserva si el catálogo no lo trae. */
 function colorDeLinea(lineId) {
   return coloresLinea[lineId] || "#5b6676";
 }
@@ -230,12 +270,6 @@ function avisar(titulo, texto) {
   mostrar("panel-aviso", true);
 }
 
-/**
- * Clasifica el retraso en tres tramos con sentido para el viajero.
- * Los umbrales están aquí y en ningún otro sitio: si se discuten, se cambian
- * una vez. Cada tramo lleva SIEMPRE icono y texto, nunca solo color: hay gente
- * que no distingue el verde del rojo y el resultado se proyecta en una defensa.
- */
 function clasificarRetraso(segundos) {
   const min = Math.round(segundos / 60);
   if (min <= 2) return { clase: "puntual", icono: "●", texto: "En hora", min };
@@ -243,16 +277,11 @@ function clasificarRetraso(segundos) {
   return { clase: "alto", icono: "■", texto: `+${min} min`, min };
 }
 
-/**
- * Banda de llegada: dibuja dónde se espera al tren entre el percentil 10 y el 90.
- * La escala arranca en la hora teórica y llega hasta el p90 con un margen, de
- * modo que bandas anchas se ven anchas: la incertidumbre tiene que notarse.
- */
 function pintarMargen(tramo) {
   if (!tramo.retraso_s.con_intervalo) return "";
 
   const { p10, p50, p90 } = tramo.retraso_s;
-  const tope = Math.max(p90 * 1.15, 300); // al menos 5 min de escala
+  const tope = Math.max(p90 * 1.15, 300);
   const pct = (v) => Math.max(0, Math.min(100, (v / tope) * 100));
 
   const teorica = new Date(tramo.destino.hora_teorica_utc).getTime();
@@ -272,18 +301,17 @@ function pintarMargen(tramo) {
     </div>`;
 }
 
-/** Pinta la lista de trenes con su hora estimada de llegada. */
 function pintarResultado(datos) {
   if (!datos.opciones.length) {
     avisar("Sin trenes para ese trayecto", datos.aviso || "Prueba con otra hora.");
     return;
   }
 
-  // Cada tarjeta se pinta con SU línea. El formulario solo se tiñe si todos los
-  // trenes van por la misma: Atocha–Alcalá lo cubren el C2 y el C7, y teñir la
-  // interfaz del color del primero sería sencillamente falso.
   const lineas = new Set(datos.opciones.map((op) => op.tramos[0].line_id));
   aplicarColorDeLinea(lineas.size === 1 ? colorDeLinea([...lineas][0]) : null);
+
+  // Guardar las líneas del resultado para conectar con alertas
+  estado.lineasConsulta = [...lineas];
 
   $("resultados").innerHTML = datos.opciones
     .map((op) => {
@@ -316,8 +344,6 @@ function pintarResultado(datos) {
     })
     .join("");
 
-  // Aviso honesto cuando falta alguna fuente: el sistema dice con qué información
-  // trabaja en lugar de disimularlo. Es un argumento de defensa, no un defecto.
   const bloques = new Set();
   datos.opciones.forEach((op) =>
     op.tramos.forEach((t) => (t.degraded_blocks || []).forEach((b) => bloques.add(b)))
@@ -335,8 +361,324 @@ function pintarResultado(datos) {
     nota.hidden = true;
   }
 
+  // Enlace contextual a alertas si hay incidencias en las líneas del trayecto
+  actualizarEnlaceAlertas();
+
   mostrar("panel-resultado", true);
 }
+
+// ---------------------------------------------------------------------------
+// Alertas
+// ---------------------------------------------------------------------------
+
+// Datos de la última respuesta del endpoint, sin filtrar
+let datosAlertasCrudos = null;
+let filtroLineaActual = "";   // "" = todas
+let timerSondeo = null;
+const PERIODO_SONDEO_MS = 60 * 1000;
+
+const TIPO_LEGIBLE = {
+  SUPRESION: "Supresión",
+  AVERIA: "Avería",
+  RETRASO: "Retraso",
+  SERVICIO_BUS: "Servicio alternativo",
+  OBRAS: "Obras",
+  OTRO: "Otra incidencia",
+};
+
+const IMPACTO_CLASE = {
+  ALTO: "alto",
+  MEDIO: "leve",
+  BAJO: "puntual",
+};
+
+const IMPACTO_ICONO = {
+  ALTO: "■",
+  MEDIO: "▲",
+  BAJO: "●",
+};
+
+async function cargarAlertas() {
+  try {
+    const resp = await fetch(`${API}/api/alertas`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    datosAlertasCrudos = await resp.json();
+  } catch {
+    datosAlertasCrudos = null;
+  }
+  pintarPantallaAlertas();
+  actualizarBadge();
+  actualizarEnlaceAlertas();
+}
+
+function pintarPantallaAlertas() {
+  // Ocultar todo primero
+  mostrar("panel-alertas-cargando", false);
+  mostrar("panel-alertas-activas", false);
+  mostrar("panel-alertas-resueltas", false);
+  mostrar("panel-accesibilidad", false);
+  mostrar("panel-sin-alertas", false);
+  mostrar("aviso-feed", false);
+  mostrar("filtros-linea", false);
+
+  if (!datosAlertasCrudos) {
+    mostrar("panel-alertas-cargando", true);
+    return;
+  }
+
+  const datos = datosAlertasCrudos;
+
+  // Estado del feed: "datos no disponibles" nunca debe confundirse con
+  // "sin incidencias". Son cosas distintas y esta distinción es el argumento
+  // más importante de la pantalla.
+  if (datos.feed.estado === "CADUCO" || datos.feed.estado === "SIN_DATOS") {
+    $("aviso-feed-texto").textContent =
+      "Los datos de incidencias no están disponibles en este momento. " +
+      "La última actualización fue a las " + horaDeISO(datos.feed.ultima_captura || "") + ".";
+    mostrar("aviso-feed", true);
+  } else if (datos.feed.estado === "EMISOR_VACIO") {
+    $("aviso-feed-texto").textContent =
+      "El feed de incidencias de RENFE responde pero sin contenido. " +
+      "Es posible que haya un problema en la fuente.";
+    mostrar("aviso-feed", true);
+  }
+
+  // Filtrar por línea
+  const incidencias = filtrarPorLinea(datos.incidencias);
+  const activas = incidencias.filter((i) => i.estado === "ACTIVA");
+  const resueltas = incidencias.filter((i) => i.estado === "RESUELTA");
+
+  // Filtros: recoger todas las líneas con alertas hoy (sin filtrar)
+  const todasLineas = new Set();
+  datos.incidencias.forEach((i) => i.lineas.forEach((l) => todasLineas.add(l)));
+  if (todasLineas.size > 0) {
+    pintarFiltros([...todasLineas].sort());
+    mostrar("filtros-linea", true);
+  }
+
+  // Estado vacío
+  if (!activas.length && !resueltas.length && !datos.accesibilidad.length) {
+    if (filtroLineaActual) {
+      $("sin-alertas-texto").textContent =
+        `Sin incidencias hoy en la línea ${filtroLineaActual.toUpperCase()}.`;
+    } else {
+      $("sin-alertas-texto").textContent = "No se han registrado incidencias hoy en la red.";
+    }
+    mostrar("panel-sin-alertas", true);
+    return;
+  }
+
+  // Activas
+  if (activas.length) {
+    $("lista-activas").innerHTML = activas.map(pintarAlerta).join("");
+    conectarExpandibles($("lista-activas"));
+    mostrar("panel-alertas-activas", true);
+  }
+
+  // Resueltas
+  if (resueltas.length) {
+    $("lista-resueltas").innerHTML = resueltas.map((i) => pintarAlerta(i, true)).join("");
+    conectarExpandibles($("lista-resueltas"));
+    mostrar("panel-alertas-resueltas", true);
+  }
+
+  // Accesibilidad (sin filtro de línea: siempre se muestran todas)
+  const acc = datos.accesibilidad || [];
+  if (acc.length) {
+    $("lista-accesibilidad").innerHTML = acc
+      .map((a) => pintarAlertaAccesibilidad(a))
+      .join("");
+    // Mantener el estado de plegado del usuario
+    mostrar("panel-accesibilidad", true);
+  }
+}
+
+function pintarAlerta(item, resuelta = false) {
+  const cls = resuelta ? "alerta alerta--resuelta" : "alerta";
+  const lineas = item.lineas
+    .map((l) => `<span class="insignia" style="background:${colorDeLinea(l)};color:#fff">${l}</span>`)
+    .join("");
+  const sinLinea = item.lineas.length === 0
+    ? `<span class="insignia">Red</span>` : "";
+
+  const tipo = TIPO_LEGIBLE[item.tipo] || item.tipo;
+  const planificada = item.planificada
+    ? `<span class="alerta__etiqueta alerta__etiqueta--planificada">Programada</span>` : "";
+
+  const impClase = IMPACTO_CLASE[item.impacto] || "puntual";
+  const impIcono = IMPACTO_ICONO[item.impacto] || "●";
+
+  let tiempo = `Desde las ${horaDeISO(item.desde)}`;
+  if (item.hasta) tiempo += ` — resuelta a las ${horaDeISO(item.hasta)}`;
+
+  return `
+    <article class="${cls}">
+      <div class="alerta__cabecera">
+        ${lineas}${sinLinea}
+        <span class="alerta__tipo">${tipo}</span>
+        ${planificada}
+      </div>
+      <p class="alerta__texto" role="button" tabindex="0">${item.texto}</p>
+      <div class="alerta__meta">
+        <span class="alerta__hora">${tiempo}</span>
+        <span class="retraso retraso--${impClase}">
+          <span class="retraso__icono" aria-hidden="true">${impIcono}</span>${item.impacto.toLowerCase()}
+        </span>
+      </div>
+    </article>`;
+}
+
+function pintarAlertaAccesibilidad(item) {
+  const resuelta = item.estado === "RESUELTA";
+  const cls = resuelta ? "alerta alerta--resuelta" : "alerta";
+  const estaciones = (item.estaciones || []).join(", ");
+
+  let tiempo = `Desde las ${horaDeISO(item.desde)}`;
+  if (item.hasta) tiempo += ` — resuelta a las ${horaDeISO(item.hasta)}`;
+
+  return `
+    <article class="${cls}">
+      <p class="alerta__texto" role="button" tabindex="0">${item.texto}</p>
+      ${estaciones ? `<p class="alerta__estaciones">${estaciones}</p>` : ""}
+      <div class="alerta__meta">
+        <span class="alerta__hora">${tiempo}</span>
+      </div>
+    </article>`;
+}
+
+/** Permite expandir/contraer el texto de la alerta con clic o teclado. */
+function conectarExpandibles(contenedor) {
+  contenedor.querySelectorAll(".alerta__texto").forEach((el) => {
+    function toggle() { el.classList.toggle("alerta__texto--expandido"); }
+    el.addEventListener("click", toggle);
+    el.addEventListener("keydown", (ev) => { if (ev.key === "Enter") toggle(); });
+  });
+}
+
+// --- Filtros por línea ---------------------------------------------------
+
+function pintarFiltros(lineas) {
+  const cont = $("filtros-linea");
+  // Conservar el filtro "Todas" que ya está en el HTML
+  const html = lineas.map((l) => {
+    const activo = filtroLineaActual.toLowerCase() === l.toLowerCase() ? " filtro--activo" : "";
+    const color = colorDeLinea(l);
+    return `<button class="filtro${activo}" data-linea="${l}" type="button"
+              style="--filtro-color:${color}">${l}</button>`;
+  }).join("");
+
+  // Botón "Todas" + botón "Tu trayecto" si hay líneas de consulta + líneas individuales
+  let prefijos = "";
+  const todasActivo = !filtroLineaActual ? " filtro--activo" : "";
+  prefijos += `<button class="filtro${todasActivo}" data-linea="" type="button">Todas</button>`;
+
+  if (estado.lineasConsulta.length > 0) {
+    const trayectoActivo = filtroLineaActual === "__trayecto__" ? " filtro--activo" : "";
+    prefijos += `<button class="filtro${trayectoActivo}" data-linea="__trayecto__" type="button">Tu trayecto</button>`;
+  }
+
+  cont.innerHTML = prefijos + html;
+}
+
+function filtrarPorLinea(incidencias) {
+  if (!filtroLineaActual) return incidencias;
+
+  if (filtroLineaActual === "__trayecto__") {
+    const set = new Set(estado.lineasConsulta.map((l) => l.toLowerCase()));
+    return incidencias.filter(
+      (i) => i.lineas.length === 0 || i.lineas.some((l) => set.has(l.toLowerCase()))
+    );
+  }
+
+  const objetivo = filtroLineaActual.toLowerCase();
+  return incidencias.filter(
+    (i) => i.lineas.length === 0 || i.lineas.some((l) => l.toLowerCase() === objetivo)
+  );
+}
+
+$("filtros-linea").addEventListener("click", (ev) => {
+  const btn = ev.target.closest(".filtro");
+  if (!btn) return;
+  filtroLineaActual = btn.dataset.linea;
+  pintarPantallaAlertas();
+});
+
+// --- Plegable de accesibilidad -------------------------------------------
+
+$("toggle-accesibilidad").addEventListener("click", () => {
+  const expandido = $("toggle-accesibilidad").getAttribute("aria-expanded") === "true";
+  $("toggle-accesibilidad").setAttribute("aria-expanded", String(!expandido));
+  $("lista-accesibilidad").hidden = expandido;
+});
+
+// --- Badge y enlace contextual -------------------------------------------
+
+function actualizarBadge() {
+  const badge = $("badge-alertas");
+  if (!datosAlertasCrudos) {
+    badge.hidden = true;
+    return;
+  }
+  const n = datosAlertasCrudos.resumen.activas;
+  badge.textContent = String(n);
+  badge.hidden = n === 0;
+}
+
+/** Enlace "Ver alertas de tu trayecto" en el panel de resultado. */
+function actualizarEnlaceAlertas() {
+  const btn = $("ver-alertas-trayecto");
+  if (!datosAlertasCrudos || estado.lineasConsulta.length === 0) {
+    btn.hidden = true;
+    return;
+  }
+
+  // ¿Hay alertas activas en las líneas del trayecto?
+  const set = new Set(estado.lineasConsulta.map((l) => l.toLowerCase()));
+  const relevantes = datosAlertasCrudos.incidencias.filter(
+    (i) => i.estado === "ACTIVA" && i.lineas.some((l) => set.has(l.toLowerCase()))
+  );
+
+  if (relevantes.length === 0) {
+    btn.hidden = true;
+    return;
+  }
+
+  const plural = relevantes.length === 1 ? "incidencia activa" : "incidencias activas";
+  const lineasTexto = estado.lineasConsulta.join(", ");
+  $("enlace-alertas-texto").textContent =
+    `${relevantes.length} ${plural} en ${lineasTexto}`;
+  btn.hidden = false;
+}
+
+$("ver-alertas-trayecto").addEventListener("click", () => {
+  filtroLineaActual = "__trayecto__";
+  irA("alertas");
+});
+
+// --- Sondeo con visibilitychange -----------------------------------------
+
+function iniciarSondeo() {
+  pararSondeo();
+  timerSondeo = setInterval(cargarAlertas, PERIODO_SONDEO_MS);
+}
+
+function pararSondeo() {
+  if (timerSondeo) {
+    clearInterval(timerSondeo);
+    timerSondeo = null;
+  }
+}
+
+// Pausar el sondeo cuando la pestaña no está visible. Sin esto, una pestaña
+// olvidada lanza un GET cada 60 s al servidor para siempre.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && estado.pantallaActiva === "alertas") {
+    cargarAlertas();
+    iniciarSondeo();
+  } else {
+    pararSondeo();
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Arranque
@@ -370,7 +712,6 @@ $("intercambiar").addEventListener("click", () => {
 $("buscar").addEventListener("click", consultar);
 
 document.addEventListener("keydown", (ev) => {
-  // Enter desde cualquier campo lanza la consulta, si no hay lista abierta.
   if (ev.key === "Enter" && !ev.target.closest(".sugerencias") &&
       $("sugerencias-origen").hidden && $("sugerencias-destino").hidden) {
     consultar();
@@ -378,3 +719,7 @@ document.addEventListener("keydown", (ev) => {
 });
 
 cargarColores();
+
+// Carga inicial de alertas en segundo plano para tener el badge listo.
+// No arranca el sondeo: solo carga una vez.
+cargarAlertas();
