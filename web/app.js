@@ -550,26 +550,66 @@ function pintarAlertaAccesibilidad(item) {
 
 /** Conecta los botones "leer más" / "leer menos" de las alertas.
  *  Si el texto no está truncado (cabe en 3 líneas), se oculta el botón. */
+/* --- Cálculo de si el texto de una alerta necesita "leer más" -------------
+
+   No se mide el DOM. Las dos vías que se probaron antes fallan:
+
+     - `scrollHeight` frente a `clientHeight`: sobre un elemento
+       `display: -webkit-box` con `line-clamp` devuelve valores poco fiables.
+     - Un umbral de caracteres: descartado con el dato real. Dos alertas del
+       30/08 se diferencian en UN carácter (C9 = 241, C10 = 240) y caen a
+       lados opuestos: C10 cabe en tres líneas y C9 no. Lo que decide no es
+       la longitud sino dónde rompen las palabras — C9 arrastra tokens largos
+       e indivisibles (`Cercedilla-Puerto`) que desperdician final de línea.
+
+   Se simula el salto de línea con las métricas reales de la fuente mediante
+   `canvas.measureText`. Es exacto, se adapta a cualquier ancho de pantalla y
+   no depende del layout.                                                    */
+
+const lienzoMedida = document.createElement("canvas").getContext("2d");
+
+/** Número de líneas que ocupa `texto` en un ancho dado, con la fuente dada. */
+function contarLineas(texto, anchoPx, fuenteCss) {
+  lienzoMedida.font = fuenteCss;
+
+  // Oportunidades de salto: tras un espacio y tras un guion, igual que hace
+  // el navegador con `word-break: normal`. El lookbehind conserva el
+  // separador al final del trozo.
+  const trozos = texto.split(/(?<=[\s-])/);
+
+  let lineas = 1;
+  let actual = "";
+  for (const trozo of trozos) {
+    const prueba = actual + trozo;
+    // Se mide sin el espacio final: al romper línea el navegador lo descarta.
+    if (lienzoMedida.measureText(prueba.trimEnd()).width <= anchoPx) {
+      actual = prueba;
+    } else {
+      lineas += 1;
+      actual = trozo;
+    }
+  }
+  return lineas;
+}
+
 function conectarExpandibles(contenedor) {
-  // Se espera a que las fuentes web estén cargadas: midiendo con la fuente
-  // de reserva, el texto ocupa más líneas de las que ocupará de verdad y
-  // aparecen botones que luego no hacen falta.
+  // Se espera a las fuentes web: midiendo con la de reserva, las anchuras
+  // son otras y el recuento de líneas sale mal.
   document.fonts.ready.then(() => {
     contenedor.querySelectorAll(".alerta").forEach((art) => {
       const texto = art.querySelector(".alerta__texto");
       const boton = art.querySelector(".alerta__leer-mas");
       if (!texto || !boton) return;
 
-      // Medición A/B: altura recortada a 3 líneas frente a altura sin recortar.
-      // No se usa scrollHeight directamente porque sobre un elemento
-      // display:-webkit-box con line-clamp devuelve valores poco fiables.
-      const recortada = texto.getBoundingClientRect().height;
-      texto.classList.add("alerta__texto--expandido");
-      const completa = texto.getBoundingClientRect().height;
-      texto.classList.remove("alerta__texto--expandido");
+      const estilo = getComputedStyle(texto);
+      // El recorte se lee del CSS para que los dos valores no se desincronicen.
+      const tope = parseInt(estilo.webkitLineClamp, 10) || 3;
+      const ancho = texto.clientWidth;
 
-      if (completa <= recortada + 2) {
-        boton.hidden = true;   // el texto cabe entero: el botón no aporta nada
+      const lineas = contarLineas(texto.textContent, ancho, estilo.font);
+
+      if (lineas <= tope) {
+        boton.hidden = true;   // cabe entero: el botón no aporta nada
         return;
       }
 
@@ -582,6 +622,15 @@ function conectarExpandibles(contenedor) {
     });
   });
 }
+
+// Al cambiar el ancho de la ventana, el número de líneas cambia: se recalcula.
+let temporizadorAncho = null;
+window.addEventListener("resize", () => {
+  clearTimeout(temporizadorAncho);
+  temporizadorAncho = setTimeout(() => {
+    if (estado.pantallaActiva === "alertas") pintarPantallaAlertas();
+  }, 200);
+});
 
 // --- Filtros por línea ---------------------------------------------------
 
