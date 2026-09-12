@@ -83,6 +83,28 @@ class _BackendHTTP:
         raise PredictorError(f"Backend {self.nombre} no respondió: {ultimo_error}")
 
 
+class _BackendPkl:
+    """Modelo real de LightGBM empaquetado en pickle, con su adaptador.
+
+    Provisional y consciente: el contrato exige MLflow, no un pickle suelto, porque
+    un pickle depende de las versiones exactas de las librerías y rompe en silencio
+    entre entornos. Se acepta aquí para adelantar la integración y detectar los
+    desajustes de columnas antes de que llegue el modelo definitivo.
+    """
+
+    def __init__(self, ruta: str):
+        from adaptador_modelo import ModeloRetrasos  # import perezoso: requiere pandas
+
+        self.modelo = ModeloRetrasos(ruta)
+        self.nombre = "pkl"
+
+    def score(self, filas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        # A diferencia de los backends HTTP, aquí NO se proyecta a las columnas del
+        # contrato: el adaptador necesita los metadatos (fecha de servicio, hora
+        # teórica de llegada) para reconstruir las variables del entrenamiento.
+        return self.modelo.predict(filas)
+
+
 class _BackendLocal:
     """Inferencia en el propio VPS con el modelo MLflow descargado.
 
@@ -127,8 +149,12 @@ class Predictor:
         self.backend_nombre = (backend or os.getenv("PREDICTOR_BACKEND", "stub")).lower()
 
         if self.backend_nombre == "stub":
-            url = os.getenv("STUB_URL", "http://127.0.0.1:8601/invocations")
+            url = os.getenv("STUB_URL", "http://127.0.0.1:8501/invocations")
             self._backend: Any = _BackendHTTP(url, nombre="stub")
+
+        elif self.backend_nombre == "pkl":
+            ruta = os.getenv("RUTA_MODELO_PKL", "/home/tfm/modelo/modelo_retrasos_v2.pkl")
+            self._backend = _BackendPkl(ruta)
 
         elif self.backend_nombre == "local":
             uri = os.getenv("MODEL_URI", "/home/tfm/modelo/cercanias_delay")
@@ -157,7 +183,13 @@ class Predictor:
             validate_row(fila, strict_unknown=False)
 
         t0 = time.perf_counter()
-        predicciones = self._backend.score(to_model_frame(filas))
+        # Los backends HTTP solo reciben las features del contrato, en orden fijo.
+        # El backend de pickle necesita además los metadatos (fecha de servicio, hora
+        # teórica) para reconstruir las variables tal como se calcularon al entrenar.
+        if self.backend_nombre == "pkl":
+            predicciones = self._backend.score(filas)
+        else:
+            predicciones = self._backend.score(to_model_frame(filas))
         latencia_ms = (time.perf_counter() - t0) * 1000
 
         if len(predicciones) != len(filas):
