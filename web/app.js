@@ -488,7 +488,7 @@ function pintarPantallaAlertas() {
     $("lista-accesibilidad").innerHTML = acc
       .map((a) => pintarAlertaAccesibilidad(a))
       .join("");
-    // Mantener el estado de plegado del usuario
+    conectarExpandibles($("lista-accesibilidad"));
     mostrar("panel-accesibilidad", true);
   }
 }
@@ -518,7 +518,8 @@ function pintarAlerta(item, resuelta = false) {
         <span class="alerta__tipo">${tipo}</span>
         ${planificada}
       </div>
-      <p class="alerta__texto" role="button" tabindex="0">${item.texto}</p>
+      <p class="alerta__texto">${item.texto}</p>
+      <button class="alerta__leer-mas" type="button">leer más</button>
       <div class="alerta__meta">
         <span class="alerta__hora">${tiempo}</span>
         <span class="retraso retraso--${impClase}">
@@ -538,7 +539,8 @@ function pintarAlertaAccesibilidad(item) {
 
   return `
     <article class="${cls}">
-      <p class="alerta__texto" role="button" tabindex="0">${item.texto}</p>
+      <p class="alerta__texto">${item.texto}</p>
+      <button class="alerta__leer-mas" type="button">leer más</button>
       ${estaciones ? `<p class="alerta__estaciones">${estaciones}</p>` : ""}
       <div class="alerta__meta">
         <span class="alerta__hora">${tiempo}</span>
@@ -546,12 +548,24 @@ function pintarAlertaAccesibilidad(item) {
     </article>`;
 }
 
-/** Permite expandir/contraer el texto de la alerta con clic o teclado. */
+/** Conecta los botones "leer más" / "leer menos" de las alertas.
+ *  Si el texto no está truncado (cabe en 3 líneas), se oculta el botón. */
 function conectarExpandibles(contenedor) {
-  contenedor.querySelectorAll(".alerta__texto").forEach((el) => {
-    function toggle() { el.classList.toggle("alerta__texto--expandido"); }
-    el.addEventListener("click", toggle);
-    el.addEventListener("keydown", (ev) => { if (ev.key === "Enter") toggle(); });
+  contenedor.querySelectorAll(".alerta").forEach((art) => {
+    const texto = art.querySelector(".alerta__texto");
+    const boton = art.querySelector(".alerta__leer-mas");
+    if (!texto || !boton) return;
+
+    // Comprobar si el texto está realmente truncado
+    if (texto.scrollHeight <= texto.clientHeight + 2) {
+      boton.hidden = true;
+      return;
+    }
+
+    boton.addEventListener("click", () => {
+      const expandido = texto.classList.toggle("alerta__texto--expandido");
+      boton.textContent = expandido ? "leer menos" : "leer más";
+    });
   });
 }
 
