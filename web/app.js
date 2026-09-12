@@ -471,15 +471,15 @@ function pintarPantallaAlertas() {
   // Activas
   if (activas.length) {
     $("lista-activas").innerHTML = activas.map(pintarAlerta).join("");
-    conectarExpandibles($("lista-activas"));
     mostrar("panel-alertas-activas", true);
+    conectarExpandibles($("lista-activas"));
   }
 
   // Resueltas
   if (resueltas.length) {
     $("lista-resueltas").innerHTML = resueltas.map((i) => pintarAlerta(i, true)).join("");
-    conectarExpandibles($("lista-resueltas"));
     mostrar("panel-alertas-resueltas", true);
+    conectarExpandibles($("lista-resueltas"));
   }
 
   // Accesibilidad (sin filtro de línea: siempre se muestran todas)
@@ -488,8 +488,8 @@ function pintarPantallaAlertas() {
     $("lista-accesibilidad").innerHTML = acc
       .map((a) => pintarAlertaAccesibilidad(a))
       .join("");
-    conectarExpandibles($("lista-accesibilidad"));
     mostrar("panel-accesibilidad", true);
+    conectarExpandibles($("lista-accesibilidad"));
   }
 }
 
@@ -551,20 +551,26 @@ function pintarAlertaAccesibilidad(item) {
 /** Conecta los botones "leer más" / "leer menos" de las alertas.
  *  Si el texto no está truncado (cabe en 3 líneas), se oculta el botón. */
 function conectarExpandibles(contenedor) {
-  contenedor.querySelectorAll(".alerta").forEach((art) => {
-    const texto = art.querySelector(".alerta__texto");
-    const boton = art.querySelector(".alerta__leer-mas");
-    if (!texto || !boton) return;
+  // Se difiere al siguiente frame porque el panel puede acabar de hacerse
+  // visible: sin el frame, scrollHeight y clientHeight son ambos 0 y el
+  // check de truncado falla siempre (0 <= 2 → oculta todos los botones).
+  requestAnimationFrame(() => {
+    contenedor.querySelectorAll(".alerta").forEach((art) => {
+      const texto = art.querySelector(".alerta__texto");
+      const boton = art.querySelector(".alerta__leer-mas");
+      if (!texto || !boton) return;
 
-    // Comprobar si el texto está realmente truncado
-    if (texto.scrollHeight <= texto.clientHeight + 2) {
-      boton.hidden = true;
-      return;
-    }
+      // Si el texto no está truncado, ocultar el botón
+      if (texto.scrollHeight <= texto.clientHeight + 2) {
+        boton.hidden = true;
+        return;
+      }
 
-    boton.addEventListener("click", () => {
-      const expandido = texto.classList.toggle("alerta__texto--expandido");
-      boton.textContent = expandido ? "leer menos" : "leer más";
+      boton.hidden = false;
+      boton.addEventListener("click", () => {
+        const expandido = texto.classList.toggle("alerta__texto--expandido");
+        boton.textContent = expandido ? "leer menos" : "leer más";
+      });
     });
   });
 }
