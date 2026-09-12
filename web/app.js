@@ -87,12 +87,18 @@ function irA(pantalla) {
 
   estado.pantallaActiva = pantalla;
 
-  // Al entrar en alertas, cargar y arrancar el sondeo
+  // Al entrar en alertas o en mapa, cargar y arrancar su sondeo. Solo sondea la
+  // pantalla visible: dos temporizadores a la vez serían dos GET por minuto para
+  // enseñar una sola cosa.
+  pararSondeo();
+  pararSondeoMapa();
   if (pantalla === "alertas") {
     cargarAlertas();
     iniciarSondeo();
-  } else {
-    pararSondeo();
+  } else if (pantalla === "mapa") {
+    iniciarMapa();
+    cargarMapa();
+    iniciarSondeoMapa();
   }
 }
 
@@ -200,12 +206,18 @@ function montarBuscador(idEntrada, idLista, clave) {
 // Colores de línea (vienen del GTFS, no están escritos a mano)
 // ---------------------------------------------------------------------------
 const coloresLinea = {};
+// El trazado de cada línea ya viene del catálogo GTFS en /api/lineas. El mapa lo
+// dibuja desde aquí: no hay ningún fichero de geometría aparte que mantener.
+const trazadosLinea = {};
 
 async function cargarColores() {
   try {
     const resp = await fetch(`${API}/api/lineas`);
     const datos = await resp.json();
-    datos.lineas.forEach((l) => (coloresLinea[l.line_id] = l.color));
+    datos.lineas.forEach((l) => {
+      coloresLinea[l.line_id] = l.color;
+      trazadosLinea[l.line_id] = l.trazado || [];
+    });
     $("pie-version").textContent = `Horarios GTFS · versión ${datos.gtfs_version}`;
   } catch {
     $("pie-version").textContent = "";
@@ -720,13 +732,264 @@ function pararSondeo() {
 // Pausar el sondeo cuando la pestaña no está visible. Sin esto, una pestaña
 // olvidada lanza un GET cada 60 s al servidor para siempre.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && estado.pantallaActiva === "alertas") {
+  const visible = document.visibilityState === "visible";
+  if (visible && estado.pantallaActiva === "alertas") {
     cargarAlertas();
     iniciarSondeo();
+  } else if (visible && estado.pantallaActiva === "mapa") {
+    cargarMapa();
+    iniciarSondeoMapa();
   } else {
     pararSondeo();
+    pararSondeoMapa();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Pantalla de mapa
+// ---------------------------------------------------------------------------
+
+const PERIODO_MAPA_MS = 30 * 1000;
+
+const mapaEstado = {
+  mapa: null,
+  capaLineas: null,
+  capaTrenes: null,
+  marcadores: new Map(),   // id de vehículo -> marcador de Leaflet
+  polilineas: new Map(),   // line_id -> polilínea
+  filtro: "",              // "" = todas las líneas
+  datos: null,
+  timer: null,
+};
+
+/** Construye el mapa la primera vez que se entra en la pantalla.
+ *  No se puede construir antes: Leaflet mide el contenedor al crearlo y el div está
+ *  oculto hasta ese momento, así que saldría con 0 px de alto. */
+function iniciarMapa() {
+  if (mapaEstado.mapa) {
+    // Al volver a la pestaña, el contenedor pudo cambiar de tamaño mientras estaba
+    // oculto (rotar el móvil). Sin esto, el mapa queda recortado.
+    setTimeout(() => mapaEstado.mapa.invalidateSize(), 0);
+    return;
+  }
+  if (typeof L === "undefined") {
+    $("aviso-mapa-texto").textContent =
+      "No se ha podido cargar la librería del mapa. Recarga la página.";
+    mostrar("aviso-mapa", true);
+    return;
+  }
+
+  const mapa = L.map("mapa", { zoomControl: true }).setView([40.42, -3.7], 10);
+
+  // Teselas de OpenStreetMap. `referrerPolicy` es obligatorio: Leaflet 1.9.4 es de
+  // 2023 y no la fija solo, y sin cabecera Referer el servidor de OSM bloquea las
+  // teselas sin devolver ningún error visible.
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+    referrerPolicy: "strict-origin-when-cross-origin",
+    attribution:
+      '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · ' +
+      "Datos de RENFE (CC BY 4.0)",
+  }).addTo(mapa);
+
+  mapaEstado.capaLineas = L.layerGroup().addTo(mapa);
+  mapaEstado.capaTrenes = L.layerGroup().addTo(mapa);
+  mapaEstado.mapa = mapa;
+
+  pintarTrazados();
+  pintarFiltrosMapa();
+  setTimeout(() => mapa.invalidateSize(), 0);
+}
+
+function pintarTrazados() {
+  const puntosTodos = [];
+  Object.entries(trazadosLinea).forEach(([lineId, puntos]) => {
+    if (!puntos || !puntos.length) return;
+    const linea = L.polyline(puntos, {
+      color: colorDeLinea(lineId),
+      weight: 3,
+      opacity: 0.75,
+    }).addTo(mapaEstado.capaLineas);
+    mapaEstado.polilineas.set(lineId, linea);
+    puntosTodos.push(...puntos);
+  });
+  if (puntosTodos.length) {
+    mapaEstado.mapa.fitBounds(L.latLngBounds(puntosTodos), { padding: [20, 20] });
+  }
+}
+
+/** Triángulo girado al rumbo, o cuadrado si el tren está detenido.
+ *  Un tren parado no se gira: el rumbo de un vehículo que no se mueve sería una
+ *  dirección inventada. */
+function iconoTren(tren) {
+  const color = colorDeLinea(tren.linea);
+  const forma = tren.parado
+    ? `<rect x="5" y="5" width="12" height="12" rx="2" fill="${color}"
+             stroke="#101826" stroke-width="1.5"/>`
+    : `<path d="M11 2 L18 19 L11 15 L4 19 Z" fill="${color}" stroke="#101826"
+             stroke-width="1.5" stroke-linejoin="round"
+             transform="rotate(${tren.rumbo ?? 0} 11 11)"/>`;
+  return L.divIcon({
+    className: "marcador-tren",
+    html: `<svg width="22" height="22" viewBox="0 0 22 22">${forma}</svg>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
+function textoRetraso(tren) {
+  if (tren.retraso_s === null || tren.retraso_s === undefined) {
+    return "Sin estimación de retraso";
+  }
+  const min = Math.round(tren.retraso_s / 60);
+  if (min <= 0) return "En hora, según RENFE";
+  return `${min} min de retraso, según RENFE`;
+}
+
+function fichaTren(tren) {
+  const situacion = tren.parado
+    ? `Parado en ${tren.parada ?? "una estación"}`
+    : `En marcha hacia ${tren.parada ?? "la siguiente parada"}`;
+  return `
+    <div class="tren-popup">
+      <p class="tren-popup__linea" style="--linea:${colorDeLinea(tren.linea)}">
+        ${tren.linea ?? "Línea sin identificar"}
+      </p>
+      <p class="tren-popup__destino">Dirección ${tren.destino ?? "desconocida"}</p>
+      <p class="tren-popup__dato">${situacion}</p>
+      <p class="tren-popup__dato">${textoRetraso(tren)}</p>
+    </div>`;
+}
+
+async function cargarMapa() {
+  try {
+    const resp = await fetch(`${API}/api/mapa`, { cache: "no-store" });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    mapaEstado.datos = await resp.json();
+  } catch {
+    mapaEstado.datos = null;
+  }
+  pintarMapa();
+}
+
+function pintarMapa() {
+  if (!mapaEstado.mapa) return;
+  const datos = mapaEstado.datos;
+  mostrar("aviso-mapa", false);
+
+  if (!datos) {
+    $("aviso-mapa-texto").textContent =
+      "No se han podido cargar las posiciones. Se reintenta en unos segundos.";
+    mostrar("aviso-mapa", true);
+    $("mapa-pie").textContent = "";
+    return;
+  }
+
+  // Estado del feed. "No hay trenes" y "no tengo datos" son cosas distintas, y el
+  // mapa tiene que decir cuál de las dos: si no, un fallo del emisor parecerá nuestro.
+  if (datos.feed.estado === "CADUCO" || datos.feed.estado === "SIN_DATOS") {
+    $("aviso-mapa-texto").textContent =
+      "Las posiciones no están disponibles en este momento. Última actualización a las " +
+      horaDeISO(datos.feed.ultima_captura || "") + ".";
+    mostrar("aviso-mapa", true);
+  } else if (datos.feed.estado === "EMISOR_VACIO") {
+    $("aviso-mapa-texto").textContent =
+      "El feed de posiciones de RENFE responde pero sin contenido. " +
+      "Es posible que haya un problema en la fuente.";
+    mostrar("aviso-mapa", true);
+  }
+
+  const visibles = datos.trenes.filter(
+    (t) => !mapaEstado.filtro || t.linea === mapaEstado.filtro
+  );
+
+  const vistos = new Set();
+  visibles.forEach((tren) => {
+    vistos.add(tren.id);
+    const existente = mapaEstado.marcadores.get(tren.id);
+    if (existente) {
+      existente.setLatLng([tren.lat, tren.lon]);
+      existente.setIcon(iconoTren(tren));
+      existente.setPopupContent(fichaTren(tren));
+    } else {
+      const m = L.marker([tren.lat, tren.lon], {
+        icon: iconoTren(tren),
+        keyboard: true,
+        title: `${tren.linea ?? ""} dirección ${tren.destino ?? ""}`,
+      })
+        .bindPopup(fichaTren(tren))
+        .addTo(mapaEstado.capaTrenes);
+      mapaEstado.marcadores.set(tren.id, m);
+    }
+  });
+
+  mapaEstado.marcadores.forEach((m, id) => {
+    if (!vistos.has(id)) {
+      mapaEstado.capaTrenes.removeLayer(m);
+      mapaEstado.marcadores.delete(id);
+    }
+  });
+
+  // Con filtro, las demás líneas se atenúan en lugar de desaparecer: la red tiene
+  // que seguir reconociéndose para saber dónde está lo que sí se mira.
+  mapaEstado.polilineas.forEach((linea, lineId) => {
+    const activa = !mapaEstado.filtro || lineId === mapaEstado.filtro;
+    linea.setStyle({ opacity: activa ? 0.85 : 0.12, weight: activa ? 4 : 2 });
+  });
+
+  pintarFiltrosMapa();
+
+  const edad = datos.feed.antiguedad_s;
+  const cuando = edad === null || edad === undefined ? "" : ` · actualizado hace ${edad} s`;
+  if (visibles.length) {
+    $("mapa-pie").textContent =
+      `${visibles.length} ${visibles.length === 1 ? "tren" : "trenes"} en circulación${cuando}`;
+  } else if (datos.n_trenes === 0) {
+    $("mapa-pie").textContent = `No hay trenes de Cercanías Madrid en circulación${cuando}`;
+  } else {
+    $("mapa-pie").textContent =
+      `Ningún tren de la línea ${mapaEstado.filtro} ahora mismo${cuando}`;
+  }
+}
+
+function pintarFiltrosMapa() {
+  const lineas = Object.keys(trazadosLinea).sort();
+  if (!lineas.length) return;
+
+  const conTrenes = new Set((mapaEstado.datos?.trenes || []).map((t) => t.linea));
+  const todas = !mapaEstado.filtro ? " filtro--activo" : "";
+  const botones = lineas
+    .map((l) => {
+      const activo = mapaEstado.filtro === l ? " filtro--activo" : "";
+      const vacio = conTrenes.has(l) ? "" : " filtro--vacio";
+      return `<button class="filtro${activo}${vacio}" data-linea="${l}" type="button"
+                style="--filtro-color:${colorDeLinea(l)}">${l}</button>`;
+    })
+    .join("");
+
+  $("filtros-mapa").innerHTML =
+    `<button class="filtro${todas}" data-linea="" type="button">Todas</button>` + botones;
+  mostrar("filtros-mapa", true);
+}
+
+$("filtros-mapa").addEventListener("click", (ev) => {
+  const btn = ev.target.closest(".filtro");
+  if (!btn) return;
+  mapaEstado.filtro = btn.dataset.linea;
+  pintarMapa();
+});
+
+function iniciarSondeoMapa() {
+  pararSondeoMapa();
+  mapaEstado.timer = setInterval(cargarMapa, PERIODO_MAPA_MS);
+}
+
+function pararSondeoMapa() {
+  if (mapaEstado.timer) {
+    clearInterval(mapaEstado.timer);
+    mapaEstado.timer = null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Arranque

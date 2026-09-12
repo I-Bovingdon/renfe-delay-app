@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 
+<link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
@@ -28,7 +29,7 @@
       <button class="nav__item" data-pantalla="alertas" type="button">
         Alertas<span class="nav__badge" id="badge-alertas" hidden>0</span>
       </button>
-      <button class="nav__item nav__item--deshabilitado" data-pantalla="mapa" type="button" disabled>
+      <button class="nav__item" data-pantalla="mapa" type="button">
         Mapa
       </button>
     </nav>
@@ -174,11 +175,21 @@
 
   <!-- ======================== PANTALLA: MAPA =========================== -->
   <div class="pantalla" id="pantalla-mapa" hidden>
-    <section class="panel panel--estado">
-      <p class="estado__titulo">Mapa de la red</p>
-      <p class="estado__texto">Próximamente: estado en tiempo real de cada línea.</p>
+
+    <!-- Aviso de feed degradado o caduco -->
+    <div class="aviso-feed" id="aviso-mapa" role="alert" hidden>
+      <p class="aviso-feed__texto" id="aviso-mapa-texto"></p>
+    </div>
+
+    <!-- Filtros por línea -->
+    <div class="filtros-linea" id="filtros-mapa" hidden></div>
+
+    <section class="panel panel--mapa">
+      <div class="mapa" id="mapa"></div>
+      <p class="mapa__pie" id="mapa-pie" aria-live="polite"></p>
     </section>
-  </div>
+
+  </div><!-- /pantalla-mapa -->
 
 </main>
 
@@ -187,6 +198,9 @@
   <p class="pie__dato" id="pie-version"></p>
 </footer>
 
+<!-- Leaflet servido desde el propio dominio: el día de la defensa no puede depender
+     de que un CDN de terceros responda. -->
+<script src="vendor/leaflet.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
