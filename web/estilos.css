@@ -738,26 +738,42 @@ body {
   color: var(--gris);
 }
 
-/* --- Texto: truncable a 3 líneas, expandible con clic -------------------- */
+/* --- Texto recortado a 3 líneas, expandible ------------------------------
+
+   Se recorta con `max-height` en `em`, NO con `-webkit-line-clamp`. Motivo:
+   `line-clamp` exige `display: -webkit-box`, y sobre ese modo de caja
+   `scrollHeight` y `clientWidth` devuelven valores que no sirven para
+   detectar el desbordamiento. Con una caja de bloque normal, la comparación
+   `scrollHeight > clientHeight` es exacta, y es lo que app.js usa para
+   decidir si el botón "leer más" debe existir.
+
+   --lineas y el 1.45 de line-height van juntos: si se cambia uno hay que
+   cambiar el otro.                                                          */
 .alerta__texto {
+  --lineas: 3;
   margin: 0 0 calc(var(--u) * 0.75);
   font-size: 0.92rem;
   line-height: 1.45;
   color: var(--tinta);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+  max-height: calc(var(--lineas) * 1.45em);
   overflow: hidden;
 }
 
-.alerta__texto--expandido {
-  display: block;
-  -webkit-line-clamp: unset;
-  overflow: visible;
+.alerta__texto--expandido { max-height: none; }
+
+/* Desvanecido de la última línea. Sustituye a los puntos suspensivos que
+   daba `line-clamp` y comunica lo mismo: el texto continúa. Se aplica solo
+   cuando de verdad hay contenido oculto, nunca "por si acaso". */
+.alerta[data-truncado="si"] .alerta__texto:not(.alerta__texto--expandido) {
+  mask-image: linear-gradient(to bottom, #000 62%, rgba(0, 0, 0, 0.15) 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, rgba(0, 0, 0, 0.15) 100%);
 }
 
+/* El botón NO existe salvo que la alerta esté marcada como truncada. Quien
+   decide es el CSS a partir de `data-truncado`, que escribe app.js: así el
+   estado vive en un único sitio. */
 .alerta__leer-mas {
-  display: inline;
+  display: none;
   padding: 0;
   border: none;
   background: none;
@@ -769,6 +785,8 @@ body {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+.alerta[data-truncado="si"] .alerta__leer-mas { display: inline; }
 
 .alerta__leer-mas:hover { color: var(--tinta); }
 
