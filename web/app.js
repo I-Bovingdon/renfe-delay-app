@@ -519,7 +519,7 @@ function pintarAlerta(item, resuelta = false) {
         ${planificada}
       </div>
       <p class="alerta__texto">${item.texto}</p>
-      <button class="alerta__leer-mas" type="button">leer más</button>
+      <button class="alerta__leer-mas" type="button" hidden>leer más</button>
       <div class="alerta__meta">
         <span class="alerta__hora">${tiempo}</span>
         <span class="retraso retraso--${impClase}">
@@ -540,7 +540,7 @@ function pintarAlertaAccesibilidad(item) {
   return `
     <article class="${cls}">
       <p class="alerta__texto">${item.texto}</p>
-      <button class="alerta__leer-mas" type="button">leer más</button>
+      <button class="alerta__leer-mas" type="button" hidden>leer más</button>
       ${estaciones ? `<p class="alerta__estaciones">${estaciones}</p>` : ""}
       <div class="alerta__meta">
         <span class="alerta__hora">${tiempo}</span>
@@ -551,25 +551,30 @@ function pintarAlertaAccesibilidad(item) {
 /** Conecta los botones "leer más" / "leer menos" de las alertas.
  *  Si el texto no está truncado (cabe en 3 líneas), se oculta el botón. */
 function conectarExpandibles(contenedor) {
-  // Se difiere al siguiente frame porque el panel puede acabar de hacerse
-  // visible: sin el frame, scrollHeight y clientHeight son ambos 0 y el
-  // check de truncado falla siempre (0 <= 2 → oculta todos los botones).
-  requestAnimationFrame(() => {
+  // Se espera a que las fuentes web estén cargadas: midiendo con la fuente
+  // de reserva, el texto ocupa más líneas de las que ocupará de verdad y
+  // aparecen botones que luego no hacen falta.
+  document.fonts.ready.then(() => {
     contenedor.querySelectorAll(".alerta").forEach((art) => {
       const texto = art.querySelector(".alerta__texto");
       const boton = art.querySelector(".alerta__leer-mas");
       if (!texto || !boton) return;
 
-      // Si el texto no está truncado, ocultar el botón.
-      // Tolerancia de 8px: scrollHeight y clientHeight pueden diferir en
-      // 3-5px por redondeo de sub-píxeles, y una línea mide ~21px. Con 8px
-      // se ignora el redondeo pero se detecta cualquier línea oculta.
-      if (texto.scrollHeight <= texto.clientHeight + 8) {
-        boton.hidden = true;
+      // Medición A/B: altura recortada a 3 líneas frente a altura sin recortar.
+      // No se usa scrollHeight directamente porque sobre un elemento
+      // display:-webkit-box con line-clamp devuelve valores poco fiables.
+      const recortada = texto.getBoundingClientRect().height;
+      texto.classList.add("alerta__texto--expandido");
+      const completa = texto.getBoundingClientRect().height;
+      texto.classList.remove("alerta__texto--expandido");
+
+      if (completa <= recortada + 2) {
+        boton.hidden = true;   // el texto cabe entero: el botón no aporta nada
         return;
       }
 
       boton.hidden = false;
+      boton.textContent = "leer más";
       boton.addEventListener("click", () => {
         const expandido = texto.classList.toggle("alerta__texto--expandido");
         boton.textContent = expandido ? "leer menos" : "leer más";
