@@ -550,66 +550,89 @@ function pintarAlertaAccesibilidad(item) {
 
 /** Conecta los botones "leer más" / "leer menos" de las alertas.
  *  Si el texto no está truncado (cabe en 3 líneas), se oculta el botón. */
-/* --- Cálculo de si el texto de una alerta necesita "leer más" -------------
+/* --- ¿Necesita el texto de la alerta un botón "leer más"? ----------------
 
-   No se mide el DOM. Las dos vías que se probaron antes fallan:
+   Se mide sobre un CLON en bloque con ancho explícito, no sobre el elemento
+   real. El elemento real es `display: -webkit-box` con `line-clamp`, y sobre
+   ese modo de caja ni `scrollHeight` ni `clientWidth` son fiables: fue la
+   causa de tres intentos fallidos, el último con el ancho leído a 0, que
+   hacía que cada palabra "desbordase" y saliera el botón en todas.
 
-     - `scrollHeight` frente a `clientHeight`: sobre un elemento
-       `display: -webkit-box` con `line-clamp` devuelve valores poco fiables.
-     - Un umbral de caracteres: descartado con el dato real. Dos alertas del
-       30/08 se diferencian en UN carácter (C9 = 241, C10 = 240) y caen a
-       lados opuestos: C10 cabe en tres líneas y C9 no. Lo que decide no es
-       la longitud sino dónde rompen las palabras — C9 arrastra tokens largos
-       e indivisibles (`Cercedilla-Puerto`) que desperdician final de línea.
+   Un umbral de caracteres tampoco sirve, y el dato real lo demuestra: las
+   alertas C9 y C10 del 30/08 se diferencian en UN carácter (241 y 240) y
+   caen a lados opuestos. Decide dónde rompen las palabras, no la longitud:
+   C9 arrastra tokens indivisibles (`Cercedilla-Puerto`) que dejan muerto el
+   final de línea, C10 rellena sus tres líneas al 97 %.
 
-   Se simula el salto de línea con las métricas reales de la fuente mediante
-   `canvas.measureText`. Es exacto, se adapta a cualquier ancho de pantalla y
-   no depende del layout.                                                    */
+   Ante cualquier medida no fiable se devuelve `false`: más vale un texto
+   recortado sin botón que un botón que no hace nada.                        */
 
-const lienzoMedida = document.createElement("canvas").getContext("2d");
+const DIAGNOSTICO_LEER_MAS = true;   // poner a false cuando esté verificado
 
-/** Número de líneas que ocupa `texto` en un ancho dado, con la fuente dada. */
-function contarLineas(texto, anchoPx, fuenteCss) {
-  lienzoMedida.font = fuenteCss;
+function necesitaLeerMas(texto) {
+  const estilo = getComputedStyle(texto);
+  const ancho = texto.getBoundingClientRect().width;
+  const altoLinea = parseFloat(estilo.lineHeight);
+  const tope = parseInt(estilo.webkitLineClamp, 10) || 3;
 
-  // Oportunidades de salto: tras un espacio y tras un guion, igual que hace
-  // el navegador con `word-break: normal`. El lookbehind conserva el
-  // separador al final del trozo.
-  const trozos = texto.split(/(?<=[\s-])/);
-
-  let lineas = 1;
-  let actual = "";
-  for (const trozo of trozos) {
-    const prueba = actual + trozo;
-    // Se mide sin el espacio final: al romper línea el navegador lo descarta.
-    if (lienzoMedida.measureText(prueba.trimEnd()).width <= anchoPx) {
-      actual = prueba;
-    } else {
-      lineas += 1;
-      actual = trozo;
+  // Ancho o alto de línea no creíbles: no se arriesga a poner el botón.
+  if (!(ancho > 50) || !(altoLinea > 0)) {
+    if (DIAGNOSTICO_LEER_MAS) {
+      console.warn("[leer mas] medida no fiable", { ancho, altoLinea });
     }
+    return false;
   }
-  return lineas;
+
+  // Clon fuera de pantalla, en bloque, con la misma tipografía y ancho.
+  // Al no tener recorte, su altura es exactamente nº de líneas x alto de línea.
+  const clon = document.createElement("div");
+  clon.textContent = texto.textContent;
+  clon.style.cssText = [
+    "position:absolute", "left:-99999px", "top:0",
+    "visibility:hidden", "pointer-events:none",
+    "display:block", "white-space:normal", "margin:0", "padding:0",
+    `width:${ancho}px`,
+    `font-family:${estilo.fontFamily}`,
+    `font-size:${estilo.fontSize}`,
+    `font-weight:${estilo.fontWeight}`,
+    `line-height:${estilo.lineHeight}`,
+    `letter-spacing:${estilo.letterSpacing}`,
+    `word-spacing:${estilo.wordSpacing}`,
+  ].join(";");
+  document.body.appendChild(clon);
+  const altoCompleto = clon.getBoundingClientRect().height;
+  clon.remove();
+
+  const lineas = Math.round(altoCompleto / altoLinea);
+
+  if (DIAGNOSTICO_LEER_MAS) {
+    console.log("[leer mas]", {
+      caracteres: texto.textContent.length,
+      ancho: Math.round(ancho),
+      altoLinea: altoLinea.toFixed(2),
+      altoCompleto: Math.round(altoCompleto),
+      lineas,
+      tope,
+      boton: lineas > tope,
+      inicio: texto.textContent.slice(0, 24),
+    });
+  }
+
+  // Media línea de tolerancia frente al redondeo de sub-píxeles.
+  return altoCompleto > altoLinea * tope + altoLinea * 0.5;
 }
 
 function conectarExpandibles(contenedor) {
-  // Se espera a las fuentes web: midiendo con la de reserva, las anchuras
-  // son otras y el recuento de líneas sale mal.
+  // Se espera a las fuentes web: con la fuente de reserva las anchuras son
+  // otras y el recuento de líneas sale mal.
   document.fonts.ready.then(() => {
     contenedor.querySelectorAll(".alerta").forEach((art) => {
       const texto = art.querySelector(".alerta__texto");
       const boton = art.querySelector(".alerta__leer-mas");
       if (!texto || !boton) return;
 
-      const estilo = getComputedStyle(texto);
-      // El recorte se lee del CSS para que los dos valores no se desincronicen.
-      const tope = parseInt(estilo.webkitLineClamp, 10) || 3;
-      const ancho = texto.clientWidth;
-
-      const lineas = contarLineas(texto.textContent, ancho, estilo.font);
-
-      if (lineas <= tope) {
-        boton.hidden = true;   // cabe entero: el botón no aporta nada
+      if (!necesitaLeerMas(texto)) {
+        boton.hidden = true;
         return;
       }
 
@@ -623,7 +646,7 @@ function conectarExpandibles(contenedor) {
   });
 }
 
-// Al cambiar el ancho de la ventana, el número de líneas cambia: se recalcula.
+// Al cambiar el ancho de la ventana cambia el número de líneas: se recalcula.
 let temporizadorAncho = null;
 window.addEventListener("resize", () => {
   clearTimeout(temporizadorAncho);
