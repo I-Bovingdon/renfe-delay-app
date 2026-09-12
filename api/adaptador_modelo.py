@@ -129,6 +129,8 @@ class ModeloRetrasos:
             "alerta_AVERIA_t0": None,
             "alerta_OBRAS_t0": None,
             "alerta_RETRASO_t0": None,
+            "alerta_SERVICIO_BUS_t0": None,
+
             # El calendario de eventos no está integrado en el servicio.
             "num_eventos": None,
             "evento_pequeño": None,
@@ -137,6 +139,8 @@ class ModeloRetrasos:
             "evento_Miscellaneous": None,
             "evento_Music": None,
             "evento_Sports": None,
+            "evento_Undefined": None,
+            "evento_grande": None,
         }
 
         # Comprobación de contrato inverso: que no falte ni sobre ninguna columna.

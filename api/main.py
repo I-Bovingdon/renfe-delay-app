@@ -37,6 +37,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+import alertas
 import features
 from catalogo import Catalogo
 from estado_red import INTERVALO_REFRESCO_S, CacheContexto, FuenteSimulada
@@ -88,12 +89,23 @@ async def lifespan(app: FastAPI):
     estado["predictor"] = Predictor()
     estado["arrancado_utc"] = ahora_utc()
 
+    # Alertas: caché propia, hilo propio. No se reutiliza estado_red para no
+    # acoplar dominios de fallo (ver alertas.py, docstring de arrancar_tarea).
+    almacen = alertas.AlmacenAlertas(
+        paradas_madrid=frozenset(cat.estaciones),
+        nombre_parada=lambda sid: (cat.estacion(sid) or {}).get("nombre", sid),
+    )
+    almacen.cargar_ultima_captura()       # ~3 ms: el endpoint ya responde
+    almacen.arrancar_tarea_de_fondo()     # backfill + refresco cada 60 s
+    estado["alertas"] = almacen
+
     tarea = asyncio.create_task(_refresco_periodico(cache))
     log.info("API lista. Refresco de contexto cada %d s.", INTERVALO_REFRESCO_S)
 
     yield
 
     tarea.cancel()
+    estado["alertas"].detener()  # type: ignore[union-attr]
     log.info("API detenida.")
 
 
@@ -278,6 +290,27 @@ def consultar(peticion: ConsultaTrayecto):
         opciones=opciones,
         aviso=aviso,
     )
+
+
+@app.get("/api/alertas")
+def consultar_alertas(linea: str | None = None):
+    """Incidencias del día de servicio en curso, clasificadas.
+
+    Sin filtro devuelve todas. Con `?linea=C3` devuelve solo las de esa línea
+    más las que no tienen línea identificable (avisos de red).
+    """
+    almacen: alertas.AlmacenAlertas = estado["alertas"]  # type: ignore[assignment]
+    resultado = almacen.estado()
+
+    if linea:
+        objetivo = linea.strip().lower()
+        resultado["incidencias"] = [
+            i for i in resultado["incidencias"]
+            if not i["lineas"] or objetivo in [l.lower() for l in i["lineas"]]
+        ]
+        resultado["filtro_linea"] = linea
+
+    return resultado
 
 
 @app.get("/api/salud")
