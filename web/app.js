@@ -560,8 +560,11 @@ function conectarExpandibles(contenedor) {
       const boton = art.querySelector(".alerta__leer-mas");
       if (!texto || !boton) return;
 
-      // Si el texto no está truncado, ocultar el botón
-      if (texto.scrollHeight <= texto.clientHeight + 2) {
+      // Si el texto no está truncado, ocultar el botón.
+      // Tolerancia de 8px: scrollHeight y clientHeight pueden diferir en
+      // 3-5px por redondeo de sub-píxeles, y una línea mide ~21px. Con 8px
+      // se ignora el redondeo pero se detecta cualquier línea oculta.
+      if (texto.scrollHeight <= texto.clientHeight + 8) {
         boton.hidden = true;
         return;
       }

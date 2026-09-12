@@ -73,7 +73,7 @@ body {
 .cabecera {
   width: 100%;
   max-width: var(--ancho);
-  padding: calc(var(--u) * 4) 0 calc(var(--u) * 2);
+  padding: calc(var(--u) * 5) 0 calc(var(--u) * 2);
   overflow: visible;
 }
 
