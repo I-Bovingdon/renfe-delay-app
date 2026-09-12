@@ -40,7 +40,8 @@ from fastapi.staticfiles import StaticFiles
 import alertas
 import features
 from catalogo import Catalogo
-from estado_red import INTERVALO_REFRESCO_S, CacheContexto, FuenteSimulada
+from estado_red import INTERVALO_REFRESCO_S, CacheContexto
+from fuente_raw import FuenteRaw
 from modelos import (
     ConsultaTrayecto,
     Estacion,
@@ -81,8 +82,21 @@ async def lifespan(app: FastAPI):
         time.perf_counter() - t0, cat.gtfs_version, len(cat.estaciones), len(cat.trips),
     )
 
-    cache = CacheContexto(FuenteSimulada(), [l["line_id"] for l in cat.lineas])
-    cache.refrescar()
+    # FuenteRaw necesita el conjunto de paradas del núcleo para filtrar los trenes de
+    # Madrid: el feed de RENFE es nacional y el sufijo de línea se repite entre
+    # núcleos (existe un C1 en Sevilla). El filtro es topológico, no geográfico.
+    cache = CacheContexto(
+        FuenteRaw(paradas_madrid=cat.estaciones),
+        [l["line_id"] for l in cat.lineas],
+    )
+    if not cache.refrescar():
+        # No se aborta el arranque: la API tiene que responder aunque el estado de red
+        # no esté disponible, y el modelo sabe tratar los nulos. Pero se registra en
+        # ERROR para que se vea en journalctl al desplegar.
+        log.error(
+            "El estado de red no se pudo calcular en el arranque: %s",
+            cache.salud()["ultimo_error"],
+        )
 
     estado["catalogo"] = cat
     estado["cache"] = cache

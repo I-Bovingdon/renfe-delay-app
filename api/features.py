@@ -160,7 +160,9 @@ def construir_filas(
                 estado_linea=cache.estado_linea(tramo.line_id),
                 meteo=cache.meteo(tramo.destino_stop_id),
                 alertas=cache.alertas(tramo.line_id),
-                estado_propio=None,  # F7: se leerá del feed en tiempo real
+                # F7: estado real del tren, leído del feed por FuenteRaw. El cruce
+                # feed <-> catálogo lo resuelve la caché por núcleo del trip_id.
+                estado_propio=cache.estado_propio(tramo.trip_id),
                 request_id=request_id,
             )
         )

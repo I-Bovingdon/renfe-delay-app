@@ -95,12 +95,22 @@ class ModeloRetrasos:
         llegada = desde_iso(f["sched_arrival_utc"]).astimezone(MADRID)
         service_date = datetime.fromisoformat(f["service_date"]).date()
 
+        moving = 1 if f["regime"] == "A" else 0
+
+        # CORRECCIÓN F7. El pipeline de entrenamiento fuerza a CERO, no a nulo, el
+        # retraso propio cuando moving=0 (cercanias_pipeline.py: filas.loc[filas
+        # ["moving"] == 0, "own_train_delay_so_far_s"] = 0). El modelo nunca vio la
+        # combinación (moving=0, retraso propio nulo), y el régimen B es la mayoría de
+        # las consultas reales: el pasajero pregunta ANTES de que salga el tren.
+        # Enviar nulo aquí era train/serve skew silencioso en el caso más frecuente.
+        retraso_propio = f.get("own_delay_s") if moving else 0.0
+
         fila: dict[str, Any] = {
             # --- Correspondencias directas ---
             "linea": f["line_id"],
             "horizon_min": f["horizon_s"] / 60.0,
-            "moving": 1 if f["regime"] == "A" else 0,
-            "own_train_delay_so_far_s": f.get("own_delay_s"),
+            "moving": moving,
+            "own_train_delay_so_far_s": retraso_propio,
             "line_delay_mean_30m_s": f.get("line_delay_mean_30m_s"),
             "num_alertas_t0": f.get("alerts_active_line"),
             "temp_aire_c_t0": f.get("temp_c"),
@@ -115,8 +125,12 @@ class ModeloRetrasos:
             "trip_day_of_week": DIAS_ES[service_date.weekday()],
 
             # --- Semántica distinta: se envían nulas a propósito ---
-            # n_capturas_line_30m cuenta CAPTURAS del feed; la interfaz solo tiene
-            # trenes activos, que no es la misma magnitud.
+            # n_capturas_line_30m cuenta, en el pipeline de entrenamiento, las PARADAS
+            # COMPLETADAS de la línea en la ventana (rolling .count() sobre eventos
+            # resueltos, no sobre capturas crudas: el nombre de la columna es
+            # heredado y engañoso). En servicio solo se pueden contar trenes distintos
+            # presentes en el feed, que es un orden de magnitud menor. Un conteo con
+            # la escala equivocada es peor que un nulo.
             "n_capturas_line_30m": None,
             # El modelo se entrenó con la velocidad MEDIA del viento; la caché de la
             # interfaz guarda la RACHA máxima.

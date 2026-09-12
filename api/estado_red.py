@@ -13,9 +13,11 @@ menos de 1 s. Con caché, el camino de la petición es una consulta a un diccion
 Los tres bloques comparten el mismo ciclo de vida (refresco periódico, posible fallo de
 la fuente, degradación explícita), por eso viven en el mismo módulo.
 
-ESTADO EN F2: los valores son SIMULADOS. La lectura real de los Parquet del VPS y de
-AEMET llega en F7. La forma de los datos y el comportamiento ante fallos ya son los
-definitivos, así que F7 solo sustituye la clase fuente.
+ESTADO EN F7: la fuente de producción es FuenteRaw (ver fuente_raw.py), que lee las
+últimas capturas del feed GTFS-RT en raw/trip_updates/. FuenteSimulada se conserva
+porque sigue siendo útil para desarrollar la interfaz sin datos y para las pruebas.
+La forma de los datos y el comportamiento ante fallos no han cambiado: sustituir la
+fuente fue, como estaba previsto, una línea en main.py.
 
 TFM Cercanías RENFE · UCM · 2026
 """
@@ -25,6 +27,7 @@ from __future__ import annotations
 import logging
 import math
 import random
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -46,6 +49,17 @@ INTERVALO_REFRESCO_S = 60
 # rancios: el modelo sabe tratar un nulo, no sabe que un número es viejo.
 MAX_ANTIGUEDAD_S = 600
 
+# Prefijo de publicación que RENFE incrusta en el trip_id. Difiere entre el feed en
+# tiempo real ("3053S23573C1") y el GTFS estático ("1037J79324C7"), así que la igualdad
+# exacta de trip_id da 0% de coincidencia y el núcleo da 99,9%. Medido el 03/08/2026
+# sobre el día 17/06; es la misma normalización que usa el pipeline de entrenamiento.
+_PREFIJO_PUBLICACION = re.compile(r"^\d+[A-Za-z]")
+
+
+def nucleo_trip(trip_id: str) -> str:
+    """Quita el prefijo de publicación del trip_id para poder cruzar feed y catálogo."""
+    return _PREFIJO_PUBLICACION.sub("", str(trip_id))
+
 
 @dataclass
 class Instantanea:
@@ -55,6 +69,9 @@ class Instantanea:
     red: dict[str, Any] = field(default_factory=dict)
     meteo: dict[str, dict[str, Any]] = field(default_factory=dict)
     alertas: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Estado propio de cada tren visto en el feed, indexado por NÚCLEO del trip_id
+    # (ver nucleo_trip). Vacío con FuenteSimulada, poblado con FuenteRaw.
+    propios: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def antiguedad_s(self, ahora: datetime | None = None) -> float:
         return ((ahora or ahora_utc()) - self.calculado_utc).total_seconds()
@@ -196,6 +213,21 @@ class CacheContexto:
             return None
         return inst.alertas.get(line_id)
 
+    def estado_propio(self, trip_id: str) -> dict[str, Any] | None:
+        """Último retraso publicado del propio tren, o None si no está en el feed.
+
+        El None es frecuente y legítimo: o el tren todavía no ha salido (régimen B), o
+        circula pero el feed aún no ha publicado nada de él. Nunca se imputa cero, que
+        en los datos de entrenamiento significa "puntual", no "no lo sé".
+
+        El trip_id que llega es el del catálogo GTFS y el del feed lleva otro prefijo,
+        así que el cruce se hace por núcleo.
+        """
+        inst = self._vigente()
+        if inst is None:
+            return None
+        return inst.propios.get(nucleo_trip(trip_id))
+
     def salud(self) -> dict[str, Any]:
         """Diagnóstico para /api/salud y para el modo degradado de la interfaz."""
         inst = self._instantanea
@@ -208,6 +240,9 @@ class CacheContexto:
             "refrescos_fallidos": self.refrescos_fallidos,
             "ultimo_error": self.ultimo_error,
             "fuente": type(self.fuente).__name__,
+            # Termómetro de que el feed está llegando de verdad: si cae a 0 con el
+            # servicio en marcha, el problema está en la captura, no en la API.
+            "trenes_en_feed": len(inst.propios) if inst else None,
         }
 
 
