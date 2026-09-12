@@ -84,16 +84,6 @@ body {
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--gris);
-  display: flex;
-  align-items: center;
-  gap: calc(var(--u) * 0.75);
-}
-
-.logo-cercanias {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  flex-shrink: 0;
 }
 
 .titulo {

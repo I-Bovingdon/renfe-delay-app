@@ -113,7 +113,7 @@ function montarBuscador(idEntrada, idLista, clave) {
         (e, i) => `
         <li class="sugerencia" role="option" id="${idLista}-${i}" aria-selected="false">
           <span class="sugerencia__nombre">${e.nombre}</span>
-          <span class="insignias">${e.lineas.map((l) => `<span class="insignia" style="background:${colorDeLinea(l)};color:#fff">${l}</span>`).join("")}</span>
+          <span class="insignias">${e.lineas.map((l) => `<span class="insignia">${l}</span>`).join("")}</span>
         </li>`
       )
       .join("");
