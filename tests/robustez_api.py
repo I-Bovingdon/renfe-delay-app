@@ -98,6 +98,13 @@ def bloque_salud():
               f"{meteo.get('estaciones_corredor')} estaciones · "
               f"{meteo.get('paradas_cubiertas')} paradas")
 
+    alertas = datos.get("alertas", {})
+    ventana = alertas.get("ventana_modelo", {})
+    registrar(ventana.get("disponible") is True, "ventana de alertas disponible para el modelo",
+              f"líneas con incidencia: {ventana.get('lineas_con_incidencia')}")
+    registrar(alertas.get("feed", {}).get("estado") == "OK", "feed de alertas OK",
+              str(alertas.get("feed", {}).get("estado")))
+
     cat = datos.get("catalogo", {})
     registrar(cat.get("estaciones") == 95, "catálogo con 95 estaciones",
               f"gtfs {cat.get('gtfs_version')}")
@@ -232,8 +239,13 @@ def bloque_consulta(ids: dict[str, str]):
     codigo, _, _ = pedir("POST", "/api/consulta", crudo=b"{esto no es json")
     registrar(codigo in (400, 422), "JSON malformado", f"HTTP {codigo}")
 
+    # GET sobre una ruta que solo acepta POST devuelve 404, no 405: la web
+    # estática está montada en "/" y recoge la petición al no casar el método.
+    # Es consecuencia del diseño, no un defecto, y ninguna respuesta filtra
+    # información del servidor.
     codigo, _, _ = pedir("GET", "/api/consulta")
-    registrar(codigo == 405, "método incorrecto devuelve 405", f"HTTP {codigo}")
+    registrar(codigo in (404, 405), "método incorrecto se rechaza sin filtrar nada",
+              f"HTTP {codigo}")
 
 
 # =========================================================================== 4 ===

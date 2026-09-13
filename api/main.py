@@ -425,6 +425,32 @@ def mapa():
     return JSONResponse(datos, headers={"Cache-Control": "no-store"})
 
 
+def _salud_alertas() -> dict:
+    """Bloque de incidencias para el diagnóstico.
+
+    Se compone aquí y no se delega entero a `AlmacenAlertas.estado()` porque ese
+    método serializa el texto de cada aviso, que no pinta nada en una sonda de
+    salud. De él se toman solo la frescura del feed y los recuentos.
+
+    Se añade lo que NO está en ninguna otra parte: cuántas líneas tienen
+    incidencias en la ventana de 30 minutos que consume el modelo. Es el
+    termómetro de que las seis columnas de alerta están llegando de verdad, y
+    distingue "el feed va bien y hoy no hay incidencias" de "el feed no llega".
+    """
+    almacen = estado["alertas"]
+    st = almacen.estado()  # type: ignore[attr-defined]
+    ventana = almacen.ventana_modelo()  # type: ignore[attr-defined]
+    return {
+        "feed": st["feed"],
+        "resumen": st["resumen"],
+        "ventana_modelo": {
+            "disponible": ventana is not None,
+            "ventana_min": alertas.VENTANA_MODELO_S // 60,
+            "lineas_con_incidencia": sorted(ventana) if ventana else [],
+        },
+    }
+
+
 @app.get("/api/salud")
 def salud():
     """Diagnóstico del servicio. Lo consulta la interfaz para avisar de degradaciones."""
@@ -444,6 +470,7 @@ def salud():
         "contexto": cache.salud(),
         "posiciones": estado["posiciones"].estado()["feed"],  # type: ignore[attr-defined]
         "meteo": estado["meteo"].salud(),  # type: ignore[attr-defined]
+        "alertas": _salud_alertas(),
         "predictor": {"backend": estado["predictor"].backend_nombre},  # type: ignore[attr-defined]
     }
 
