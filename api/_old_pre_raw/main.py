@@ -6,8 +6,6 @@ Une todas las piezas detrás de cuatro endpoints HTTP:
     GET  /api/estaciones   catálogo de estaciones para el selector
     GET  /api/lineas       trazados y colores para el mapa
     POST /api/consulta     origen + destino + hora  ->  trenes con predicción
-    GET  /api/alertas      incidencias del día, clasificadas
-    GET  /api/mapa         posiciones de los trenes en circulación ahora
     GET  /api/salud        estado de las fuentes, para el modo degradado
 
 Dos decisiones que gobiernan el rendimiento:
@@ -37,14 +35,12 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import alertas
 import features
 from catalogo import Catalogo
-from estado_red import INTERVALO_REFRESCO_S, CacheContexto
-from fuente_raw import FuenteRaw
+from estado_red import INTERVALO_REFRESCO_S, CacheContexto, FuenteSimulada
 from modelos import (
     ConsultaTrayecto,
     Estacion,
@@ -54,7 +50,6 @@ from modelos import (
     Retraso,
     Tramo as TramoRespuesta,
 )
-from posiciones import FuentePosiciones
 from predictor import Predictor, PredictorError
 from resolver import resolver_trayecto
 from tiempo import ahora_utc, desde_iso, iso_utc
@@ -86,21 +81,8 @@ async def lifespan(app: FastAPI):
         time.perf_counter() - t0, cat.gtfs_version, len(cat.estaciones), len(cat.trips),
     )
 
-    # FuenteRaw necesita el conjunto de paradas del núcleo para filtrar los trenes de
-    # Madrid: el feed de RENFE es nacional y el sufijo de línea se repite entre
-    # núcleos (existe un C1 en Sevilla). El filtro es topológico, no geográfico.
-    cache = CacheContexto(
-        FuenteRaw(paradas_madrid=cat.estaciones),
-        [l["line_id"] for l in cat.lineas],
-    )
-    if not cache.refrescar():
-        # No se aborta el arranque: la API tiene que responder aunque el estado de red
-        # no esté disponible, y el modelo sabe tratar los nulos. Pero se registra en
-        # ERROR para que se vea en journalctl al desplegar.
-        log.error(
-            "El estado de red no se pudo calcular en el arranque: %s",
-            cache.salud()["ultimo_error"],
-        )
+    cache = CacheContexto(FuenteSimulada(), [l["line_id"] for l in cat.lineas])
+    cache.refrescar()
 
     estado["catalogo"] = cat
     estado["cache"] = cache
@@ -117,23 +99,11 @@ async def lifespan(app: FastAPI):
     almacen.arrancar_tarea_de_fondo()     # backfill + refresco cada 60 s
     estado["alertas"] = almacen
 
-    # Posiciones en vivo para el mapa. Caché propia y tarea propia: un fallo leyendo
-    # vehicle_positions no puede dejar sin refrescar el estado de red, que sí está en
-    # la ruta crítica de la predicción.
-    posiciones = FuentePosiciones(cat)
-    posiciones.refrescar()            # el endpoint ya responde desde el primer segundo
-    estado["posiciones"] = posiciones
-
     tarea = asyncio.create_task(_refresco_periodico(cache))
-    tarea_mapa = asyncio.create_task(_refresco_posiciones(posiciones))
-    log.info(
-        "API lista. Refresco de contexto cada %d s, de posiciones cada %d s.",
-        INTERVALO_REFRESCO_S, INTERVALO_MAPA_S,
-    )
+    log.info("API lista. Refresco de contexto cada %d s.", INTERVALO_REFRESCO_S)
 
     yield
 
-    tarea_mapa.cancel()
     tarea.cancel()
     estado["alertas"].detener()  # type: ignore[union-attr]
     log.info("API detenida.")
@@ -153,29 +123,6 @@ async def _refresco_periodico(cache: CacheContexto) -> None:
             raise
         except Exception:  # noqa: BLE001
             log.exception("Error en el refresco periódico; se reintenta en el siguiente ciclo")
-
-
-# El colector escribe una captura por minuto. Refrescar cada 30 s acota la antigüedad
-# percibida sin releer nada de más: si el epoch del último fichero no ha cambiado,
-# `refrescar` sale sin abrirlo.
-INTERVALO_MAPA_S = 30
-
-
-async def _refresco_posiciones(fuente: FuentePosiciones) -> None:
-    """Refresca la última foto de posiciones en segundo plano, para siempre.
-
-    Separada de `_refresco_periodico` a propósito: el mapa es una pantalla, el estado
-    de red es una entrada del modelo. Un fallo en la primera no puede arrastrar a la
-    segunda.
-    """
-    while True:
-        try:
-            await asyncio.sleep(INTERVALO_MAPA_S)
-            await asyncio.to_thread(fuente.refrescar)
-        except asyncio.CancelledError:
-            raise
-        except Exception:  # noqa: BLE001
-            log.exception("Error refrescando posiciones; se reintenta en el siguiente ciclo")
 
 
 app = FastAPI(
@@ -366,30 +313,6 @@ def consultar_alertas(linea: str | None = None):
     return resultado
 
 
-@app.get("/api/mapa")
-def mapa():
-    """Trenes del núcleo de Madrid en circulación ahora mismo.
-
-    El retraso NO se lee aquí: lo sirve la caché de contexto, que ya aplica el umbral
-    de plausibilidad y el cruce feed<->catálogo. Un solo sitio decide qué retraso es
-    creíble.
-    """
-    fuente: FuentePosiciones = estado["posiciones"]  # type: ignore[assignment]
-    cache: CacheContexto = estado["cache"]  # type: ignore[assignment]
-
-    datos = fuente.estado()
-    for tren in datos["trenes"]:
-        # OJO: se pasa el trip_id TAL CUAL viene del feed. `estado_propio` aplica
-        # `nucleo_trip` por dentro, y esa función NO es idempotente: aplicada dos
-        # veces sobre "3053S23573C1" devuelve "1" y el cruce se pierde en silencio.
-        propio = cache.estado_propio(tren["trip_id"])
-        tren["retraso_s"] = propio["own_delay_s"] if propio else None
-        tren["retraso_edad_s"] = propio["own_delay_age_s"] if propio else None
-
-    # no-store: una posición cacheada por el navegador es una posición falsa.
-    return JSONResponse(datos, headers={"Cache-Control": "no-store"})
-
-
 @app.get("/api/salud")
 def salud():
     """Diagnóstico del servicio. Lo consulta la interfaz para avisar de degradaciones."""
@@ -407,7 +330,6 @@ def salud():
             "trips": len(cat.trips),
         },
         "contexto": cache.salud(),
-        "posiciones": estado["posiciones"].estado()["feed"],  # type: ignore[attr-defined]
         "predictor": {"backend": estado["predictor"].backend_nombre},  # type: ignore[attr-defined]
     }
 

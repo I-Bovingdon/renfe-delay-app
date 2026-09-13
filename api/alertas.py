@@ -72,6 +72,14 @@ UMBRAL_CAPTURAS_VACIAS = 5
 # "avería ..., demoras de 15 minutos" se clasificaba como RETRASO y la
 # categoría AVERIA quedaba sistemáticamente a cero.
 PATRONES_TIPO = (
+    # RESOLUCION va PRIMERO y no es opcional. RENFE publica el aviso de
+    # "ya está arreglado" como una alerta nueva, y su texto contiene la
+    # palabra de la incidencia original ("Subsanada la avería en..."). Sin
+    # esta regla, un aviso de normalización se clasifica como AVERIA con
+    # impacto alto y aparece entre las incidencias activas diciendo justo
+    # lo contrario de lo que dice su texto. Ocurrió el 31/08 en C10/C7.
+    ("RESOLUCION", r"subsanad|restablecid|normalizad|recuperan sus frecuencias|"
+                   r"queda resuelt|se ha resuelto|finalizad[ao] la incidencia"),
     ("SUPRESION", r"suprimid|no presta servicio|sin circulaci[óo]n|no circula"),
     ("AVERIA", r"aver[íi]a|incidencia t[ée]cnica"),
     ("SERVICIO_BUS", r"autob[úu]s|autobuses|plan alternativo"),
@@ -90,14 +98,21 @@ RE_ACCESIBILIDAD = re.compile(
     re.IGNORECASE,
 )
 
-# Marca ortogonal al tipo: la incidencia estaba prevista.
-RE_PLANIFICADA = re.compile(r"obras|reajusta|programad|previst", re.IGNORECASE)
+# Marca ortogonal al tipo: la incidencia procede de trabajos planificados,
+# no de un fallo inesperado. NO significa que vaya a ocurrir más tarde.
+#
+# Se excluye a propósito `previst`: casaba con "tiene prevista su salida a las
+# 15:12h", una frase rutinaria presente en casi cualquier aviso, y marcaba como
+# planificadas supresiones que no lo eran. Se excluye también `reajusta` por lo
+# mismo: un reajuste de servicio puede tener cualquier causa.
+RE_PLANIFICADA = re.compile(r"obras|trabajos programad|programad[ao]s", re.IGNORECASE)
 
 # Impacto estimado. NO es un dato de RENFE: el feed no publica severidad
 # (`cause` y `effect` vienen vacíos al ~100 %). Es un criterio propio,
 # derivado del tipo de incidencia, que se usa solo para ORDENAR la lista y
 # como acento de icono. Debe documentarse como tal en la memoria.
 IMPACTO_POR_TIPO = {
+    "RESOLUCION": "BAJO",   # informa de que algo se ha arreglado: no es un problema
     "SUPRESION": "ALTO",
     "AVERIA": "ALTO",
     "RETRASO": "MEDIO",

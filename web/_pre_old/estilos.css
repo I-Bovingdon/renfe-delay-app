@@ -765,12 +765,8 @@ body {
    daba `line-clamp` y comunica lo mismo: el texto continúa. Se aplica solo
    cuando de verdad hay contenido oculto, nunca "por si acaso". */
 .alerta[data-truncado="si"] .alerta__texto:not(.alerta__texto--expandido) {
-  /* El degradado se limita al último 12 % de la caja, que es el tercio
-     inferior de la tercera línea, y no baja de 0.45 de opacidad. La versión
-     anterior arrancaba al 62 % y llegaba a 0.15: lavaba dos líneas enteras y
-     hacía que una incidencia ACTIVA pareciese desactivada. */
-  mask-image: linear-gradient(to bottom, #000 88%, rgba(0, 0, 0, 0.45) 100%);
-  -webkit-mask-image: linear-gradient(to bottom, #000 88%, rgba(0, 0, 0, 0.45) 100%);
+  mask-image: linear-gradient(to bottom, #000 62%, rgba(0, 0, 0, 0.15) 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, rgba(0, 0, 0, 0.15) 100%);
 }
 
 /* El botón NO existe salvo que la alerta esté marcada como truncada. Quien
@@ -818,15 +814,6 @@ body {
 /* --- Sección de resueltas: título atenuado ------------------------------- */
 .alerta-seccion--resuelta { opacity: 0.65; }
 
-/* Leyenda bajo el título de sección: explica qué significa cada bloque.
-   Sin ella, "activa", "resuelta" y "planificada" se interpretan a ojo. */
-.alerta-leyenda {
-  margin: calc(var(--u) * -1) 0 calc(var(--u) * 2);
-  font-size: 0.8rem;
-  line-height: 1.4;
-  color: var(--gris);
-}
-
 /* --- Plegable de accesibilidad ------------------------------------------- */
 .plegable {
   display: flex;
@@ -867,48 +854,6 @@ body {
 
 .pie p { margin: 0 0 4px; }
 .pie__dato { font-family: var(--dato); font-size: 0.72rem; }
-
-/* ============================== MÓVIL ====================================
-
-   En pantallas estrechas el eyebrow y la navegación no caben en una fila:
-   medido a 360 px, se salían 83 px. Bajar solo el tamaño del eyebrow libera
-   25 px, insuficiente. Se ajustan las tres piezas a la vez —tamaño,
-   espaciado entre letras y relleno de los botones— y el conjunto baja a
-   305 px de los 328 útiles, con margen para el botón de Mapa.
-
-   El espaciado del eyebrow es lo que más ocupa: 0.22em sobre 16 caracteres
-   son 62 px solo de aire entre letras.                                      */
-@media (max-width: 430px) {
-  .eyebrow {
-    font-size: 0.9rem;
-    letter-spacing: 0.1em;
-    gap: calc(var(--u) * 0.5);
-    min-width: 0;              /* permite que el flex lo encoja si hace falta */
-  }
-
-  .eyebrow .logo-cercanias { width: 24px; height: 24px; }
-
-  .nav__item {
-    font-size: 0.72rem;
-    letter-spacing: 0.06em;
-    padding: calc(var(--u) * 0.5) calc(var(--u) * 0.5);
-  }
-
-  .nav__badge {
-    min-width: 15px;
-    height: 15px;
-    font-size: 0.58rem;
-    margin-left: 3px;
-  }
-}
-
-/* Red de seguridad: por debajo de 340 px se renuncia al texto del eyebrow y
-   queda solo el logo. Antes que desbordar, se cede el elemento menos útil:
-   el nombre de la aplicación ya está en el título de la pantalla. */
-@media (max-width: 340px) {
-  .eyebrow { font-size: 0; gap: 0; }
-  .eyebrow .logo-cercanias { width: 24px; height: 24px; }
-}
 
 /* ============================ ACCESIBILIDAD ============================== */
 @media (prefers-reduced-motion: reduce) {

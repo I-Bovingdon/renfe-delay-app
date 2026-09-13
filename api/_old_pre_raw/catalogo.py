@@ -22,7 +22,6 @@ from datetime import date
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from estado_red import nucleo_trip
 from tiempo import fecha_de_servicio, ahora_utc
 
 # Posiciones dentro de cada trip del formato compacto. Se leen del propio catálogo
@@ -97,16 +96,6 @@ class Catalogo:
             trip[self._I_STOPS] = [sys.intern(s) for s in trip[self._I_STOPS]]
             for sid in set(trip[self._I_STOPS]):
                 self.trips_por_parada[sid].append(idx)
-
-        # --- Índice núcleo del trip_id -> trips ---
-        # El feed en tiempo real y el GTFS estático incrustan prefijos de publicación
-        # distintos en el trip_id, así que el cruce se hace por núcleo (ver
-        # estado_red.nucleo_trip). Es una lista y no un entero porque el mismo tren
-        # aparece con varios service_id (laborable, sábado, festivo) y hay que elegir
-        # el que circula hoy.
-        self.trips_por_nucleo: dict[str, list[int]] = defaultdict(list)
-        for idx, trip in enumerate(self.trips):
-            self.trips_por_nucleo[nucleo_trip(trip[self._I_TRIP])].append(idx)
 
         # --- Caché de servicios activos por fecha ---
         # Se consulta en cada petición y solo hay unas pocas fechas distintas en juego.
@@ -208,39 +197,6 @@ class Catalogo:
 
     def paradas_de(self, idx_trip: int) -> list[str]:
         return self.trips[idx_trip][self._I_STOPS]
-
-    def linea_de_trip(self, idx_trip: int) -> str:
-        """line_id exacto, con rama incluida (C4a / C4b).
-
-        Es la única vía que distingue la rama: el sufijo del trip_id del feed dice
-        'C4' y no dice cuál de las dos.
-        """
-        return self.trips[idx_trip][self._I_LINEA]
-
-    def sentido_de_trip(self, idx_trip: int) -> Any:
-        """direction_id del GTFS (0/1). Sirve para separar en el mapa los dos
-        sentidos que comparten andén."""
-        return self.trips[idx_trip][self._I_SENTIDO]
-
-    def trip_por_nucleo(
-        self, nucleo: str, fecha_servicio: date | None = None
-    ) -> int | None:
-        """Índice del trip del catálogo que corresponde a un trip_id del feed.
-
-        Con fecha se prioriza el trip cuyo service_id circula ese día; sin ella se
-        devuelve el primero. Devuelve None si el tren no está en el catálogo: pasa con
-        los trenes especiales y con los de otros núcleos, y conviene poder contarlos.
-        """
-        indices = self.trips_por_nucleo.get(nucleo)
-        if not indices:
-            return None
-        if fecha_servicio is None or len(indices) == 1:
-            return indices[0]
-        activos = self.servicios_activos(fecha_servicio)
-        for idx in indices:
-            if self.trips[idx][self._I_SERVICIO] in activos:
-                return idx
-        return indices[0]
 
 
 if __name__ == "__main__":
