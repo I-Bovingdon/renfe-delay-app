@@ -918,3 +918,90 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* =============================== MAPA ==================================== */
+/* El mapa ocupa el panel entero: es el contenido, no un adorno dentro de una
+   tarjeta con márgenes. */
+.panel--mapa {
+  padding: 0;
+  overflow: hidden;
+}
+
+.mapa {
+  height: min(68vh, 620px);
+  min-height: 360px;
+  width: 100%;
+  background: var(--niebla);
+}
+
+/* El mapa base es contexto, no contenido: se desatura y se aclara para que el color
+   de las líneas sea lo único saturado de la pantalla. Es la misma idea que gobierna
+   el resto de la interfaz: tinta sobre papel, y el color lo pone la línea.
+   Se aplica SOLO al panel de teselas; las líneas y los trenes viven en otros panes
+   de Leaflet y conservan su color. Si hiciera falta más contraste, subir brightness
+   a 1.2; pasado ese punto las autovías desaparecen y se pierde la referencia. */
+.leaflet-tile-pane {
+  filter: grayscale(1) contrast(0.82) brightness(1.12);
+}
+
+.mapa__pie {
+  margin: 0;
+  padding: calc(var(--u) * 1.5) calc(var(--u) * 2);
+  border-top: 1px solid var(--niebla);
+  font-family: var(--dato);
+  font-size: 0.8rem;
+  color: var(--gris);
+}
+
+/* Marcador de tren. Se llama marcador-tren y no tren porque .tren ya es la
+   tarjeta de resultado de la pantalla de llegada. */
+.leaflet-marker-icon.marcador-tren {
+  background: none;
+  border: none;
+  /* Suaviza el salto entre dos posiciones MEDIDAS. No se interpolan posiciones
+     intermedias: eso sería dibujar datos que no existen. */
+  transition: transform 900ms linear;
+}
+
+/* Línea sin trenes ahora mismo: el filtro sigue pulsable, pero se ve que no hay
+   nada que mostrar. */
+.filtro--vacio { opacity: 0.45; }
+
+.tren-popup__linea {
+  margin: 0 0 calc(var(--u) * 0.5);
+  font-family: var(--dato);
+  font-weight: 500;
+  font-size: 0.8rem;
+  color: var(--linea);
+}
+
+.tren-popup__destino {
+  margin: 0 0 calc(var(--u) * 0.5);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--tinta);
+}
+
+.tren-popup__dato {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--gris);
+}
+
+/* El globo de Leaflet hereda su tipografía del navegador; se alinea con la app. */
+.leaflet-popup-content { font-family: var(--texto); margin: calc(var(--u) * 1.5); }
+.leaflet-container { font-family: var(--texto); }
+
+/* Nombre de estación al pasar por encima o al tocar el punto. */
+.leaflet-tooltip {
+  font-family: var(--dato);
+  font-size: 0.72rem;
+  color: var(--tinta);
+  border: 1px solid var(--niebla);
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leaflet-marker-icon.marcador-tren { transition: none; }
+}
