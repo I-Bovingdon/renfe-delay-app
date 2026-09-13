@@ -93,3 +93,31 @@ class RespuestaConsulta(BaseModel):
         description="Mensaje para el usuario cuando no hay directos o los datos "
                     "están degradados.",
     )
+
+
+# ======================================================================== chat =====
+# Esquemas del asistente conversacional (F9). El historial lo mantiene el navegador
+# y lo devuelve en cada petición: el servidor no guarda conversaciones. Es lo que
+# permite acotar el contexto por diseño y no por confianza en el cliente, porque el
+# límite de turnos se aplica también aquí, en la validación de entrada.
+
+
+class MensajeChat(BaseModel):
+    """Un turno del historial que devuelve el navegador."""
+    rol: str = Field(..., description="'usuario' o 'asistente'")
+    texto: str = Field(..., max_length=300)
+
+
+class ConsultaChat(BaseModel):
+    """Lo que envía la ventana flotante del asistente.
+
+    `max_length` en el texto y en el historial no es cosmético: son el primer
+    control de consumo, y actúa antes de gastar un solo token del proveedor.
+    """
+    texto: str = Field(..., max_length=300)
+    sesion: str | None = Field(
+        None,
+        description="Identificador de sesión generado por el navegador. Solo sirve "
+                    "para poder explicar la última predicción; no identifica a nadie.",
+    )
+    historial: list[MensajeChat] = Field(default_factory=list, max_length=4)

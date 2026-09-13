@@ -9,6 +9,7 @@ Une todas las piezas detrás de cuatro endpoints HTTP:
     GET  /api/alertas      incidencias del día, clasificadas
     GET  /api/mapa         posiciones de los trenes en circulación ahora
     GET  /api/salud        estado de las fuentes, para el modo degradado
+    POST /api/chat         asistente conversacional (detrás de CHAT_HABILITADO)
 
 Dos decisiones que gobiernan el rendimiento:
 
@@ -35,18 +36,20 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import alertas
+import chat as chat_mod
 import features
 import meteo as meteo_mod
 from catalogo import Catalogo
 from estado_red import INTERVALO_REFRESCO_S, CacheContexto
 from fuente_raw import FuenteRaw
 from modelos import (
+    ConsultaChat,
     ConsultaTrayecto,
     Estacion,
     OpcionTrayecto,
@@ -134,6 +137,31 @@ async def lifespan(app: FastAPI):
         log.error("La meteorología no se pudo cargar en el arranque: %s",
                   fuente_meteo.ultimo_error)
     estado["meteo"] = fuente_meteo
+
+    # Asistente conversacional (F9). Recibe las MISMAS instancias que sirven a las
+    # tres pantallas: no abre ficheros por su cuenta ni mantiene una segunda idea de
+    # qué dato está fresco. Si el chat y la pantalla de alertas pudieran discrepar,
+    # la discrepancia aparecería justo durante una demo.
+    #
+    # Se construye SIEMPRE, aunque el interruptor esté a falso. Dos motivos: el coste
+    # de memoria es el mismo con y sin él, y así se puede medir; y encender el chat
+    # pasa a ser cambiar una variable y reiniciar, sin ninguna rama de arranque
+    # distinta que no se haya ejecutado nunca.
+    estado["chat"] = chat_mod.AsistenteChat(
+        catalogo=cat,
+        cache=cache,
+        almacen_alertas=almacen,
+        fuente_meteo=fuente_meteo,
+        fuente_posiciones=posiciones,
+        predictor=estado["predictor"],
+        # Se pasa la función, no su resultado: el diagnóstico tiene que calcularse
+        # en el momento de preguntarlo, no en el arranque.
+        fn_salud=lambda: salud(),
+    )
+    log.info(
+        "Asistente conversacional: habilitado=%s · modelo=%s · presupuesto %d/día",
+        chat_mod.habilitado(), chat_mod.MODELO, chat_mod.PRESUPUESTO_DIA,
+    )
 
     tarea = asyncio.create_task(_refresco_periodico(cache))
     tarea_mapa = asyncio.create_task(_refresco_posiciones(posiciones))
@@ -472,7 +500,53 @@ def salud():
         "meteo": estado["meteo"].salud(),  # type: ignore[attr-defined]
         "alertas": _salud_alertas(),
         "predictor": {"backend": estado["predictor"].backend_nombre},  # type: ignore[attr-defined]
+        # Estado del asistente: si está encendido, con qué versión de modelo y
+        # cuánto presupuesto diario queda. Es lo que permite comprobar el
+        # interruptor desde fuera sin entrar en la máquina.
+        "chat": (
+            estado["chat"].diagnostico()  # type: ignore[attr-defined]
+            if "chat" in estado else {"habilitado": False}
+        ),
     }
+
+
+@app.post("/api/chat")
+def conversar(peticion: ConsultaChat, request: Request):
+    """Asistente conversacional sobre el servicio.
+
+    El modelo de lenguaje SOLO clasifica el texto contra un conjunto cerrado de
+    intenciones. La respuesta la compone una plantilla de `chat.py` sobre datos
+    que vienen del resolutor, del modelo y de las cachés en vivo, así que el
+    asistente no puede inventar una hora de llegada ni una incidencia. Ver la
+    cabecera de chat.py.
+    """
+    if not chat_mod.habilitado():
+        # 503 y no 404: la ruta existe, el servicio está apagado a propósito. La
+        # interfaz distingue las dos cosas y oculta el acceso al asistente.
+        raise HTTPException(
+            status_code=503,
+            detail="El asistente conversacional no está activo.",
+        )
+
+    # El servicio escucha en 127.0.0.1 y quien habla con el exterior es Caddy, así
+    # que `request.client.host` es siempre la propia máquina. Sin leer la cabecera
+    # reenviada, el límite por IP se convertiría en un límite global y bastaría un
+    # visitante activo para dejar sin asistente a todos los demás.
+    reenviada = request.headers.get("x-forwarded-for", "")
+    ip = reenviada.split(",")[0].strip() or (
+        request.client.host if request.client else ""
+    )
+
+    asistente: chat_mod.AsistenteChat = estado["chat"]  # type: ignore[assignment]
+    respuesta = asistente.responder(
+        texto=peticion.texto,
+        ip=ip,
+        historial=[m.model_dump() for m in peticion.historial],
+        sesion=peticion.sesion,
+    )
+    # no-store por el mismo motivo que en /api/mapa: una respuesta cacheada sobre
+    # el estado de la red es una respuesta falsa un minuto después.
+    return JSONResponse(respuesta, headers={"Cache-Control": "no-store"})
 
 
 # La web estática se monta al final para que no capture las rutas /api/*.
