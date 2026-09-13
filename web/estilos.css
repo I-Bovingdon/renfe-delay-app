@@ -1070,3 +1070,288 @@ body {
 
 .tren--interrumpido .tren__principal,
 .tren--interrumpido .margen { opacity: 0.45; }
+
+/* =============================================================================
+   ASISTENTE CONVERSACIONAL
+
+   Ventana flotante, no cuarta pestaña. Vive fuera del flujo de las tres
+   pantallas, así que no compite con el formulario de consulta ni obliga a
+   tocar la navegación.
+
+   Hereda la misma dirección de diseño: tinta sobre papel, y --linea cuando hay
+   un trayecto elegido. El asistente no introduce color propio; si lo hiciera,
+   sería una marca dentro de una interfaz que a propósito no tiene marca.
+
+   En móvil pasa a hoja a pantalla casi completa: un panel de 22rem en una
+   pantalla de 360 px sería una ventana dentro de una ventana.
+   ============================================================================= */
+
+.asistente {
+  position: fixed;
+  right: calc(var(--u) * 2);
+  bottom: calc(var(--u) * 2);
+  z-index: 900;                 /* por encima del mapa de Leaflet (400) */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--u);
+}
+
+/* --- Lanzador --------------------------------------------------------- */
+.asistente__lanzador {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 0.75);
+  padding: calc(var(--u) * 1.25) calc(var(--u) * 2);
+  border: 0;
+  border-radius: 999px;
+  background: var(--tinta);
+  color: var(--papel);
+  font-family: var(--display);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(16, 24, 38, 0.28);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.asistente__lanzador:hover { transform: translateY(-1px); }
+.asistente__lanzador:active { transform: translateY(0); }
+
+.asistente__lanzador svg {
+  width: 20px; height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Con el panel abierto el lanzador estorba: se oculta en vez de superponerse. */
+.asistente--abierto .asistente__lanzador { display: none; }
+
+/* --- Panel ------------------------------------------------------------ */
+.chat {
+  width: 22rem;
+  max-width: calc(100vw - var(--u) * 4);
+  max-height: min(32rem, calc(100vh - var(--u) * 6));
+  display: flex;
+  flex-direction: column;
+  background: var(--carta);
+  border: 1px solid var(--niebla);
+  border-radius: var(--radio);
+  box-shadow: 0 12px 36px rgba(16, 24, 38, 0.22);
+  overflow: hidden;
+}
+
+.chat__cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(var(--u) * 1.5) calc(var(--u) * 2);
+  background: var(--tinta);
+  color: var(--papel);
+}
+
+.chat__titulo {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chat__cerrar {
+  border: 0;
+  background: none;
+  color: inherit;
+  padding: 4px;
+  cursor: pointer;
+  display: inline-flex;
+}
+
+.chat__cerrar svg {
+  width: 18px; height: 18px;
+  fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round;
+}
+
+/* --- Hilo ------------------------------------------------------------- */
+.chat__hilo {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: calc(var(--u) * 1.5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+  overscroll-behavior: contain;   /* que el scroll no arrastre la página */
+}
+
+.burbuja {
+  max-width: 88%;
+  padding: calc(var(--u) * 1.25) calc(var(--u) * 1.5);
+  border-radius: var(--radio);
+  font-size: 0.94rem;
+  line-height: 1.45;
+  white-space: pre-line;          /* las plantillas usan saltos de línea */
+  word-break: break-word;
+}
+
+.burbuja--usuario {
+  align-self: flex-end;
+  background: var(--linea);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.burbuja--asistente {
+  align-self: flex-start;
+  background: var(--papel);
+  border: 1px solid var(--niebla);
+  border-bottom-left-radius: 4px;
+}
+
+/* Degradaciones y bloqueos: mismo lenguaje ámbar que la banda de feed caduco. */
+.burbuja--aviso {
+  background: #fff8e6;
+  border-color: #e8d5a3;
+}
+
+/* Los tiempos son datos y se alinean, igual que en el resto de la interfaz. */
+.burbuja time, .burbuja .dato { font-family: var(--dato); }
+
+/* --- Indicador de espera ---------------------------------------------- */
+/* Medido: mediana 554 ms pero con cola hasta 2,3 s. Dos segundos en blanco
+   parecen una caída, así que la espera se hace visible siempre. */
+.burbuja--pensando { display: flex; gap: 5px; align-items: center; }
+
+.burbuja--pensando span {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--gris);
+  animation: latido 1.2s infinite ease-in-out;
+}
+.burbuja--pensando span:nth-child(2) { animation-delay: 0.18s; }
+.burbuja--pensando span:nth-child(3) { animation-delay: 0.36s; }
+
+@keyframes latido {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30%           { opacity: 1;    transform: translateY(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .burbuja--pensando span { animation: none; opacity: 0.5; }
+}
+
+/* --- Acción sugerida --------------------------------------------------- */
+/* Una incidencia no debe cambiarte de pantalla sola: se ofrece el salto y lo
+   decide el usuario. Solo NAVEGAR, que sí lo ha pedido, navega directamente. */
+.chat__accion {
+  align-self: flex-start;
+  margin-top: calc(var(--u) * -0.5);
+  padding: calc(var(--u) * 0.75) calc(var(--u) * 1.5);
+  border: 1px solid var(--niebla);
+  border-radius: 999px;
+  background: var(--carta);
+  color: var(--tinta);
+  font-family: var(--texto);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.chat__accion:hover { border-color: var(--linea); color: var(--linea); }
+
+/* --- Sugerencias de arranque ------------------------------------------ */
+/* Modo demostración (§8.5 del diseño): preguntas pulsables para que el día de
+   la defensa nada dependa de teclear bien delante del tribunal. */
+.chat__sugerencias {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 0.75);
+  padding: 0 calc(var(--u) * 1.5) var(--u);
+}
+
+.chat__sugerencias:empty { display: none; }
+
+.chat__sugerencia {
+  padding: calc(var(--u) * 0.6) calc(var(--u) * 1.25);
+  border: 1px dashed var(--niebla);
+  border-radius: 999px;
+  background: none;
+  color: var(--gris);
+  font-family: var(--texto);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat__sugerencia:hover { border-style: solid; color: var(--tinta); }
+
+/* --- Pie de escritura -------------------------------------------------- */
+.chat__pie {
+  display: flex;
+  gap: var(--u);
+  align-items: center;
+  padding: var(--u) calc(var(--u) * 1.5);
+  border-top: 1px solid var(--niebla);
+}
+
+.chat__entrada {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: calc(var(--u) * 1.1) calc(var(--u) * 1.5);
+  border: 1px solid var(--niebla);
+  border-radius: 999px;
+  background: var(--papel);
+  font-family: var(--texto);
+  font-size: 16px;                /* 16px evita el zoom automático en iOS */
+  color: var(--tinta);
+}
+
+.chat__entrada:focus {
+  outline: none;
+  border-color: var(--linea);
+}
+
+.chat__enviar {
+  flex: 0 0 auto;
+  width: 38px; height: 38px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--linea);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat__enviar[disabled] { opacity: 0.4; cursor: default; }
+
+.chat__enviar svg {
+  width: 18px; height: 18px;
+  fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+.chat__nota {
+  margin: 0;
+  padding: 0 calc(var(--u) * 1.5) calc(var(--u) * 1.25);
+  color: var(--gris);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+/* --- Móvil ------------------------------------------------------------- */
+@media (max-width: 30rem) {
+  .asistente { right: var(--u); bottom: var(--u); left: var(--u); align-items: stretch; }
+  .asistente__lanzador { align-self: flex-end; }
+  .chat {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100vh - var(--u) * 8);
+  }
+}

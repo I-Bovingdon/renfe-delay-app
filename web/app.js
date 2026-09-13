@@ -1225,3 +1225,207 @@ mostrarEnlaceAnalisis();
 // Carga inicial de alertas en segundo plano para tener el badge listo.
 // No arranca el sondeo: solo carga una vez.
 cargarAlertas();
+
+// ===========================================================================
+// ASISTENTE CONVERSACIONAL
+//
+// Tres decisiones que gobiernan este bloque:
+//
+// 1. NO TOCA irA(). El panel vive en un <aside> hermano de <main>, y irA()
+//    solo conmuta el hidden de los tres #pantalla-*. La conversación persiste
+//    entre Llegada, Alertas y Mapa porque nadie la oculta, no porque haya
+//    lógica que la preserve. Menos código que pueda fallar el día 18.
+//
+// 2. EL HISTORIAL VIVE AQUÍ, NO EN EL SERVIDOR. El navegador envía los dos
+//    últimos turnos en cada petición. El servidor no guarda conversaciones de
+//    nadie, y el límite de turnos se aplica además en la validación de entrada,
+//    así que no depende de que el cliente se porte bien.
+//
+// 3. LA CLAVE NUNCA ESTÁ AQUÍ. Este fichero lo descarga cualquiera que abra la
+//    página. El navegador solo habla con /api/chat; quien tiene la credencial
+//    es el servicio, y la lee del entorno. Si en algún momento apareciera una
+//    clave en app.js, el diseño estaría mal.
+// ===========================================================================
+
+const chatEstado = {
+  abierto: false,
+  enviando: false,
+  // Identificador de sesión del navegador. Solo sirve para que el servidor
+  // pueda explicar LA ÚLTIMA predicción de esta pestaña. No identifica a nadie
+  // y muere al recargar.
+  sesion: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
+  historial: [],   // [{rol, texto}], recortado a los 4 últimos turnos
+};
+
+const SUGERENCIAS_INICIO = [
+  "¿A qué hora llego a Alcalá saliendo de Atocha?",
+  "¿Qué incidencias hay ahora?",
+  "¿Qué línea va peor en este momento?",
+  "¿Qué puedes hacer?",
+];
+
+/** Añade una burbuja al hilo y devuelve el elemento, para poder sustituirlo. */
+function chatBurbuja(texto, clase) {
+  const div = document.createElement("div");
+  div.className = `burbuja burbuja--${clase}`;
+  div.textContent = texto;
+  $("chat-hilo").appendChild(div);
+  $("chat-hilo").scrollTop = $("chat-hilo").scrollHeight;
+  return div;
+}
+
+/** Indicador de espera. La mediana es medio segundo, pero hay cola hasta 2,3 s:
+ *  sin esto, una respuesta lenta parece una caída. */
+function chatPensando() {
+  const div = document.createElement("div");
+  div.className = "burbuja burbuja--asistente burbuja--pensando";
+  div.innerHTML = "<span></span><span></span><span></span>";
+  $("chat-hilo").appendChild(div);
+  $("chat-hilo").scrollTop = $("chat-hilo").scrollHeight;
+  return div;
+}
+
+/** Botón de salto sugerido. Solo aparece con acciones de tipo "sugerir": una
+ *  pregunta por incidencias no debe cambiarte de pantalla sin permiso. */
+function chatAccion(accion) {
+  if (!accion || accion.tipo !== "sugerir") return;
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "chat__accion";
+  boton.textContent = accion.etiqueta || "Ver más";
+  boton.addEventListener("click", () => {
+    irA(accion.pantalla);
+    boton.disabled = true;
+  });
+  $("chat-hilo").appendChild(boton);
+  $("chat-hilo").scrollTop = $("chat-hilo").scrollHeight;
+}
+
+function chatPintarSugerencias(lista) {
+  const caja = $("chat-sugerencias");
+  caja.innerHTML = "";
+  (lista || []).forEach((texto) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chat__sugerencia";
+    b.textContent = texto;
+    b.addEventListener("click", () => chatEnviar(texto));
+    caja.appendChild(b);
+  });
+}
+
+async function chatEnviar(texto) {
+  texto = (texto || "").trim();
+  if (!texto || chatEstado.enviando) return;
+
+  chatEstado.enviando = true;
+  $("chat-enviar").disabled = true;
+  $("chat-entrada").value = "";
+  chatPintarSugerencias([]);          // las sugerencias solo guían el arranque
+  chatBurbuja(texto, "usuario");
+  const espera = chatPensando();
+
+  try {
+    const resp = await fetch(`${API}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        texto,
+        sesion: chatEstado.sesion,
+        historial: chatEstado.historial.slice(-4),
+      }),
+    });
+
+    espera.remove();
+
+    if (resp.status === 503) {
+      // El asistente se ha apagado mientras la página estaba abierta.
+      chatBurbuja("El asistente no está disponible ahora mismo. Las pantallas " +
+                  "de llegada, alertas y mapa siguen funcionando.", "aviso");
+      $("asistente").hidden = true;
+      return;
+    }
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const datos = await resp.json();
+    const bloqueada = ["DEGRADADO", "LIMITADO", "SIN_CUOTA"].includes(datos.intencion);
+    chatBurbuja(datos.respuesta, bloqueada ? "aviso" : "asistente");
+
+    // Solo NAVEGAR cambia de pantalla por su cuenta: ahí el usuario lo ha
+    // pedido de forma explícita. El resto se ofrece como botón.
+    if (datos.accion && datos.accion.tipo === "navegar") {
+      irA(datos.accion.pantalla);
+    } else {
+      chatAccion(datos.accion);
+    }
+    if (datos.sugerencias && datos.sugerencias.length) {
+      chatPintarSugerencias(datos.sugerencias);
+    }
+
+    chatEstado.historial.push({ rol: "usuario", texto });
+    chatEstado.historial.push({ rol: "asistente", texto: datos.respuesta });
+    chatEstado.historial = chatEstado.historial.slice(-4);
+  } catch (err) {
+    espera.remove();
+    // Degradar explícito, nunca inventar: el mismo criterio que el resto del
+    // sistema. Y se dice qué SÍ funciona, que es lo útil para quien lo lee.
+    chatBurbuja("No he podido responder ahora mismo. Las pantallas de llegada, " +
+                "alertas y mapa siguen funcionando con normalidad.", "aviso");
+  } finally {
+    chatEstado.enviando = false;
+    $("chat-enviar").disabled = false;
+    $("chat-entrada").focus();
+  }
+}
+
+function chatAbrir() {
+  chatEstado.abierto = true;
+  $("asistente").classList.add("asistente--abierto");
+  $("chat-panel").hidden = false;
+  $("chat-lanzador").setAttribute("aria-expanded", "true");
+  if (!$("chat-hilo").childElementCount) {
+    chatBurbuja("Puedo consultar tu trayecto, las incidencias de la red y el " +
+                "estado de cada línea. Pregúntame.", "asistente");
+    chatPintarSugerencias(SUGERENCIAS_INICIO);
+  }
+  $("chat-entrada").focus();
+}
+
+function chatCerrar() {
+  chatEstado.abierto = false;
+  $("asistente").classList.remove("asistente--abierto");
+  $("chat-panel").hidden = true;
+  $("chat-lanzador").setAttribute("aria-expanded", "false");
+}
+
+$("chat-lanzador").addEventListener("click", chatAbrir);
+$("chat-cerrar").addEventListener("click", chatCerrar);
+
+$("chat-formulario").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  chatEnviar($("chat-entrada").value);
+});
+
+// Escape cierra el panel, pero solo si está abierto: si no, dejaría de
+// funcionar el Escape de los desplegables de estaciones.
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && chatEstado.abierto) chatCerrar();
+});
+
+/** Muestra el lanzador solo si el servicio dice que el asistente está activo.
+ *
+ *  Con CHAT_HABILITADO a falso, esta comprobación falla en silencio y el
+ *  <aside> se queda oculto: la aplicación es indistinguible de la anterior sin
+ *  necesidad de desplegar una versión distinta de la web. */
+async function chatComprobarDisponible() {
+  try {
+    const resp = await fetch(`${API}/api/salud`);
+    if (!resp.ok) return;
+    const salud = await resp.json();
+    if (salud.chat && salud.chat.habilitado) $("asistente").hidden = false;
+  } catch (err) {
+    /* sin asistente; el resto de la aplicación no se entera */
+  }
+}
+
+chatComprobarDisponible();
