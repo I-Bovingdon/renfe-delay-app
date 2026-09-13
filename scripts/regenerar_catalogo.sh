@@ -37,6 +37,9 @@ registrar() { echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] $*"; }
 
 registrar "=== Inicio de la regeneración del catálogo ==="
 
+# La carpeta puede no existir en un clonado limpio: el catálogo ya no se versiona.
+mkdir -p "$(dirname "$CATALOGO")"
+
 # --- 1. GTFS más reciente por fecha de modificación -----------------------------------
 ZIP="$(ls -t "$GTFS_DIR"/*.zip 2>/dev/null | head -1)"
 if [[ -z "$ZIP" ]]; then
