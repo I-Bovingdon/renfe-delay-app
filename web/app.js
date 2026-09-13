@@ -366,16 +366,23 @@ function pintarResultado(datos) {
 
   // Dos causas distintas, dos mensajes distintos.
   //
-  // Estructural: la fuente NO está integrada todavía y no lo estará hoy. La
-  // meteorología de AEMET se publica con unas 13 h de latencia, inservible como
-  // contexto en tiempo real; las incidencias esperan a que se conecte el
-  // clasificador al cálculo de variables. Estos bloques faltan en TODAS las
-  // consultas, así que anunciarlos como una avería puntual es falso y además
-  // enseña al usuario a ignorar el aviso.
+  // Estructural: la fuente NO está integrada todavía y no lo estará hoy. Las
+  // incidencias esperan a que se conecte el clasificador al cálculo de
+  // variables. Estos bloques faltan en TODAS las consultas, así que anunciarlos
+  // como una avería puntual es falso y además enseña al usuario a ignorar el
+  // aviso.
+  //
+  // F8 (13/09): la meteorología sale de esta lista. Desde el despliegue de
+  // meteo.py alimenta al modelo con la observación de AEMET más reciente de la
+  // estación asignada al destino, así que "meteo" en degraded_blocks vuelve a
+  // significar lo que dice: la fuente existe y hoy ha fallado. La precipitación
+  // se envía con la latencia de publicación de AEMET, que es la misma con la
+  // que entrenó el modelo; eso es una limitación declarada en la memoria, no un
+  // aviso de pantalla.
   //
   // Transitoria: la fuente existe y hoy ha fallado. Eso sí es una degradación
   // y tiene que decirse como tal.
-  const ESTRUCTURALES = new Set(["meteo", "alertas"]);
+  const ESTRUCTURALES = new Set(["alertas"]);
 
   const estructurales = [...bloques].filter((b) => ESTRUCTURALES.has(b));
   const transitorios = [...bloques].filter((b) => !ESTRUCTURALES.has(b));
@@ -419,7 +426,11 @@ let timerSondeo = null;
 const PERIODO_SONDEO_MS = 60 * 1000;
 
 const TIPO_LEGIBLE = {
-  RESOLUCION: "Incidencia resuelta",
+  // "Vuelta a la normalidad" y no "Incidencia resuelta": el tipo describe lo
+  // que dice el TEXTO del aviso, y el estado ACTIVA/RESUELTA describe si RENFE
+  // lo sigue publicando. Son ejes ortogonales y compartir la palabra "resuelta"
+  // hacía que una alerta activa de tipo RESOLUCION pareciese mal colocada.
+  RESOLUCION: "Vuelta a la normalidad",
   SUPRESION: "Supresión",
   AVERIA: "Avería",
   RETRASO: "Retraso",
@@ -577,7 +588,13 @@ function pintarPantallaAlertas() {
 
   // Activas
   if (activas.length) {
-    $("lista-activas").innerHTML = activas.map(pintarAlerta).join("");
+    // OJO con la forma corta `activas.map(pintarAlerta)`: map pasa
+    // (elemento, índice, array), así que el ÍNDICE entraba como segundo
+    // argumento de pintarAlerta, que es `resuelta`. Resultado: la primera
+    // alerta se pintaba normal (índice 0, falso) y TODAS las demás atenuadas
+    // al 55 % como si estuvieran resueltas. Se envuelve en una flecha para que
+    // llegue un único argumento.
+    $("lista-activas").innerHTML = activas.map((i) => pintarAlerta(i)).join("");
     mostrar("panel-alertas-activas", true);
     conectarExpandibles($("lista-activas"));
   }
