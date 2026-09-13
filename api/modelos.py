@@ -103,9 +103,16 @@ class RespuestaConsulta(BaseModel):
 
 
 class MensajeChat(BaseModel):
-    """Un turno del historial que devuelve el navegador."""
+    """Un turno del historial que devuelve el navegador.
+
+    El límite es MAYOR que el de `ConsultaChat.texto` a propósito: aquí no viaja
+    solo lo que escribió el usuario, sino también lo que respondió el asistente,
+    que es más largo. Con los dos límites iguales, la segunda petición de cada
+    conversación se rechazaba con un 422 (detectado el 13/09). El cliente recorta
+    a 200; este margen existe para que un cliente descuidado no rompa el servicio.
+    """
     rol: str = Field(..., description="'usuario' o 'asistente'")
-    texto: str = Field(..., max_length=300)
+    texto: str = Field(..., max_length=400)
 
 
 class ConsultaChat(BaseModel):

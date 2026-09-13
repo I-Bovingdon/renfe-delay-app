@@ -1362,8 +1362,17 @@ async function chatEnviar(texto) {
       chatPintarSugerencias(datos.sugerencias);
     }
 
-    chatEstado.historial.push({ rol: "usuario", texto });
-    chatEstado.historial.push({ rol: "asistente", texto: datos.respuesta });
+    // El historial se recorta a 200 caracteres por turno. Dos motivos:
+    //   1. Las respuestas del asistente superan con facilidad los 300 caracteres
+    //      del validador de entrada, y la petición SIGUIENTE se rechazaba con un
+    //      422 que el usuario veía como "no he podido responder". Detectado en
+    //      pruebas del 13/09: fallaba siempre a partir del segundo turno.
+    //   2. Para clasificar la pregunta siguiente basta el contexto, no el texto
+    //      íntegro: 200 caracteres bastan para resolver un "¿y a Chamartín?" y
+    //      ahorran tokens en cada llamada.
+    const recorte = (t) => String(t || "").slice(0, 200);
+    chatEstado.historial.push({ rol: "usuario", texto: recorte(texto) });
+    chatEstado.historial.push({ rol: "asistente", texto: recorte(datos.respuesta) });
     chatEstado.historial = chatEstado.historial.slice(-4);
   } catch (err) {
     espera.remove();
