@@ -334,7 +334,8 @@ function pintarResultado(datos) {
       const r = clasificarRetraso(op.retraso_total_s);
 
       return `
-        <article class="tren" style="--linea:${colorDeLinea(tramo.line_id)}">
+        <article class="tren" data-linea="${tramo.line_id}"
+                 style="--linea:${colorDeLinea(tramo.line_id)}">
           <div class="tren__origen">
             <span class="tren__linea">${tramo.line_id}</span>
             <span>Sale a las <span class="tren__salida">${salida}</span></span>
@@ -399,7 +400,9 @@ function pintarResultado(datos) {
   nota.textContent = frases.join(" ");
   nota.hidden = frases.length === 0;
 
-  // Enlace contextual a alertas si hay incidencias en las líneas del trayecto
+  // Aviso de corte de servicio en la propia ficha del tren, y enlace contextual
+  // a la pantalla de alertas si hay cualquier otra incidencia en el trayecto.
+  aplicarAvisosInterrupcion();
   actualizarEnlaceAlertas();
 
   mostrar("panel-resultado", true);
@@ -437,6 +440,68 @@ const IMPACTO_ICONO = {
   BAJO: "●",
 };
 
+// ----------------------------------------------------- corte de servicio ---
+// Tipos de incidencia que implican que el tren puede NO circular. Son los dos que
+// usa RENFE para cortes de servicio. El resto (averías, obras, retrasos) afectan a
+// la puntualidad, que es justo lo que el modelo ya predice: avisar de ellos sería
+// duplicar la predicción con peor información.
+const TIPOS_INTERRUPCION = new Set(["SUPRESION", "SERVICIO_BUS"]);
+
+// El feed publica "C4" sin distinguir la rama, mientras que el catálogo tiene C4a
+// y C4b por separado. Se comparan los códigos base para que una supresión en la C4
+// avise también en sus dos ramas. Misma aproximación que en fuente_raw.py.
+const codigoBase = (l) => (l || "").toLowerCase().replace(/[ab]$/, "");
+
+function interrupcionDeLinea(lineId) {
+  if (!datosAlertasCrudos || !datosAlertasCrudos.incidencias) return null;
+  const objetivo = codigoBase(lineId);
+  return (
+    datosAlertasCrudos.incidencias.find(
+      (i) =>
+        i.estado === "ACTIVA" &&
+        TIPOS_INTERRUPCION.has(i.tipo) &&
+        (i.lineas || []).some((l) => codigoBase(l) === objetivo)
+    ) || null
+  );
+}
+
+// Se opera sobre el DOM ya pintado en lugar de volver a pintarlo: la consulta y las
+// alertas llegan por caminos distintos y en cualquier orden (la consulta es puntual,
+// las alertas se sondean cada 60 s), así que esta función tiene que poder ejecutarse
+// las veces que haga falta sin efectos acumulados. De ahí que lo primero sea limpiar.
+function aplicarAvisosInterrupcion() {
+  document.querySelectorAll("#resultados .tren").forEach((ficha) => {
+    const previo = ficha.querySelector(".interrupcion");
+    if (previo) previo.remove();
+    ficha.classList.remove("tren--interrumpido");
+
+    const incidencia = interrupcionDeLinea(ficha.dataset.linea);
+    if (!incidencia) return;
+
+    const linea = ficha.dataset.linea;
+    // "en parte de la línea" a propósito: la alerta nombra el tramo cortado en
+    // texto libre ("entre Cercedilla, Puerto de Navacerrada y Los Cotos") y eso no
+    // se puede casar con las paradas del trayecto de forma fiable. Afirmar que
+    // ESTE tren concreto está suprimido sería ir más allá de lo que dice el dato.
+    const cabeza =
+      incidencia.tipo === "SERVICIO_BUS"
+        ? `Servicio suspendido en parte de la ${linea}. RENFE ha establecido autobuses.`
+        : `Hay supresiones de trenes en la ${linea}.`;
+
+    const aviso = document.createElement("p");
+    aviso.className = "interrupcion";
+    // El texto de la alerta NO se inyecta aquí: solo se compone a partir de su
+    // tipo y del identificador de línea del catálogo, que son datos propios.
+    aviso.innerHTML =
+      `<span class="interrupcion__icono" aria-hidden="true">■</span>` +
+      `<span>${cabeza} Este tren puede no circular; la predicción no tiene en ` +
+      `cuenta la incidencia.</span>`;
+
+    ficha.classList.add("tren--interrumpido");
+    ficha.prepend(aviso);
+  });
+}
+
 async function cargarAlertas() {
   try {
     const resp = await fetch(`${API}/api/alertas`);
@@ -448,6 +513,9 @@ async function cargarAlertas() {
   pintarPantallaAlertas();
   actualizarBadge();
   actualizarEnlaceAlertas();
+  // Si el sondeo trae una incidencia nueva mientras hay un resultado en pantalla,
+  // el aviso aparece sin que el usuario tenga que volver a consultar.
+  aplicarAvisosInterrupcion();
 }
 
 function pintarPantallaAlertas() {

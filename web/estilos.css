@@ -1017,3 +1017,29 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .leaflet-marker-icon.marcador-tren { transition: none; }
 }
+
+/* ==================== INTERRUPCIÓN DE SERVICIO =========================== */
+/* Ficha de un tren cuya línea tiene supresiones o servicio alternativo por
+   carretera. La predicción se ATENÚA pero no se oculta: ocultarla dejaría al
+   usuario sin información justo cuando más la necesita, y en la defensa invita a
+   preguntar por qué el sistema deja de predecir. El aviso es quien contextualiza. */
+.interrupcion {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--u);
+  margin: 0 0 calc(var(--u) * 1.5);
+  padding: calc(var(--u) * 1.5);
+  border: 1px solid #f0bcb9;
+  border-radius: 8px;
+  background: #fdeeed;
+  color: #97231f;
+  font-family: var(--texto);
+  font-size: 0.88rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.interrupcion__icono { flex-shrink: 0; }
+
+.tren--interrumpido .tren__principal,
+.tren--interrumpido .margen { opacity: 0.45; }
