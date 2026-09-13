@@ -229,3 +229,5 @@ api/_old_*/
 
 # Copias de seguridad locales, nunca versionadas
 api/_old_*/
+
+datos/catalogo.json.anterior
