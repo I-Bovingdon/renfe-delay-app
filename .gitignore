@@ -218,3 +218,8 @@ __marimo__/
 .streamlit/secrets.toml
 
 modelo/
+
+# Catalogo generado por el cron, 12 MB, no versionar
+datos/catalogo.json
+datos/catalogo_*.json
+datos/*.bak
