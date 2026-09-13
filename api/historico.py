@@ -40,9 +40,13 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-# La salvedad de ventana, en una frase. Se añade a la primera respuesta de cada
-# conversación, no a todas: repetirla en cada turno sería ruido y la gente deja de
-# leerla, que es justo lo contrario de lo que se busca.
+# La salvedad de ventana, en una frase. Va en TODAS las respuestas históricas, no
+# solo en la primera. Se valoró darla una sola vez por conversación y se descartó por
+# dos motivos: el estado viviría en el proceso y sería compartido entre todos los
+# visitantes, de modo que el segundo usuario del día no la vería nunca; y una cifra
+# histórica sin su ventana es una cifra que se puede citar fuera de contexto. El
+# coste es una frase repetida; el riesgo de omitirla es que alguien se lleve el
+# número suelto.
 SALVEDAD = ("Son datos de {desde} a {hasta} ({dias} días) y miden el retraso que "
             "publica Renfe, no la predicción del modelo.")
 
@@ -70,7 +74,6 @@ class HistoricoPuntualidad:
         self.umbral_s = int(doc.get("umbral_puntual_s", 180))
         self.generado = doc.get("generado_utc")
         self.observaciones = doc.get("observaciones_totales", 0)
-        self._salvedad_dada = False
 
         log.info(
             "Histórico de puntualidad: %d líneas · %s a %s · %d observaciones",
@@ -80,7 +83,7 @@ class HistoricoPuntualidad:
 
     # ------------------------------------------------------------------ apoyo ---
     def _salvedad(self) -> str:
-        """Se da una vez por proceso y por conversación larga. Ver la cabecera."""
+        """Ventana y magnitud, en una frase. Acompaña a toda cifra. Ver la cabecera."""
         return " " + SALVEDAD.format(**self.ventana)
 
     def _normalizar(self, codigo: str | None) -> str | None:
