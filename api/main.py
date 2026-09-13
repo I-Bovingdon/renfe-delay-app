@@ -44,6 +44,7 @@ from fastapi.staticfiles import StaticFiles
 import alertas
 import chat as chat_mod
 import features
+import historico as historico_mod
 import meteo as meteo_mod
 from catalogo import Catalogo
 from estado_red import INTERVALO_REFRESCO_S, CacheContexto
@@ -138,6 +139,16 @@ async def lifespan(app: FastAPI):
                   fuente_meteo.ultimo_error)
     estado["meteo"] = fuente_meteo
 
+    # Puntualidad histórica. Un JSON de pocos KB generado por
+    # scripts/generar_puntualidad.py, cargado una vez. Si no existe, `cargar`
+    # devuelve None sin lanzar y el asistente contesta que no puede responder a
+    # esas preguntas: el histórico es un extra, no un requisito de arranque.
+    ruta_puntualidad = os.getenv(
+        "RUTA_PUNTUALIDAD", "/home/tfm/renfe-delay-app/datos/puntualidad.json"
+    )
+    hist = historico_mod.cargar(ruta_puntualidad)
+    estado["historico"] = hist
+
     # Asistente conversacional (F9). Recibe las MISMAS instancias que sirven a las
     # tres pantallas: no abre ficheros por su cuenta ni mantiene una segunda idea de
     # qué dato está fresco. Si el chat y la pantalla de alertas pudieran discrepar,
@@ -154,6 +165,7 @@ async def lifespan(app: FastAPI):
         fuente_meteo=fuente_meteo,
         fuente_posiciones=posiciones,
         predictor=estado["predictor"],
+        historico=hist,
         # Se pasa la función, no su resultado: el diagnóstico tiene que calcularse
         # en el momento de preguntarlo, no en el arranque.
         fn_salud=lambda: salud(),
