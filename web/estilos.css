@@ -880,6 +880,33 @@ body {
 .pie p { margin: 0 0 4px; }
 .pie__dato { font-family: var(--dato); font-size: 0.72rem; }
 
+/* --- Enlace al panel de análisis histórico -------------------------------
+   WEB-HOLDER: aquí no hay nada que sustituir. La URL va en el href del
+   enlace #enlace-analisis, en index.html. Este bloque solo le da forma.
+
+   Se dibuja como botón discreto y no como acción principal: el panel es
+   material complementario, no parte del flujo de consulta.                */
+.pie__enlaces { margin-top: calc(var(--u) * 1.5); }
+
+.pie__enlace {
+  display: inline-block;
+  padding: calc(var(--u) * 0.75) calc(var(--u) * 1.5);
+  border: 1px solid var(--niebla);
+  border-radius: 8px;
+  color: inherit;
+  text-decoration: none;
+  font-family: var(--texto);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.pie__enlace:hover,
+.pie__enlace:focus-visible {
+  border-color: currentColor;
+  color: var(--tinta);
+}
+
 /* ============================== MÓVIL ====================================
 
    En pantallas estrechas el eyebrow y la navegación no caben en una fila:

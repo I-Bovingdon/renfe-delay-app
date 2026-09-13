@@ -224,6 +224,23 @@ async function cargarColores() {
   }
 }
 
+/** Enseña el enlace al panel de análisis solo si tiene una URL de verdad.
+ *
+ *  WEB-HOLDER: mientras el href de #enlace-analisis siga valiendo la cadena
+ *  WEB-HOLDER (o esté vacío), el enlace permanece oculto. En cuanto se ponga
+ *  la URL definitiva en index.html, aparece solo. No hay que tocar este
+ *  fichero.
+ *
+ *  Por qué ocultarlo en lugar de dejarlo puesto: un enlace visible que lleva
+ *  a una página de error delante del tribunal es peor que no tener enlace.
+ */
+function mostrarEnlaceAnalisis() {
+  const enlace = $("enlace-analisis");
+  if (!enlace) return;
+  const url = enlace.getAttribute("href") || "";
+  enlace.hidden = !(url && url !== "WEB-HOLDER" && /^https?:\/\//i.test(url));
+}
+
 function pintarSegunLinea(lineId) {
   aplicarColorDeLinea(coloresLinea[lineId]);
 }
@@ -1203,6 +1220,7 @@ document.addEventListener("keydown", (ev) => {
 });
 
 cargarColores();
+mostrarEnlaceAnalisis();
 
 // Carga inicial de alertas en segundo plano para tener el badge listo.
 // No arranca el sondeo: solo carga una vez.

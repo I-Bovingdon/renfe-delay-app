@@ -215,6 +215,26 @@
 
 <footer class="pie">
   <p>Trabajo Fin de Máster · Data Science, Big Data &amp; Business Analytics · UCM</p>
+
+  <!-- ===================== ENLACE AL PANEL DE ANÁLISIS =====================
+       WEB-HOLDER: sustituye la cadena WEB-HOLDER del atributo href por la URL
+       definitiva del panel de Power BI que entregue Carlos. Es el ÚNICO sitio
+       que hay que tocar; no hace falta cambiar nada más ni reiniciar el
+       servicio, porque los ficheros de web/ se sirven desde disco.
+
+       Mientras el href siga valiendo WEB-HOLDER, app.js oculta el enlace: es
+       preferible que no aparezca a que aparezca y lleve a ninguna parte.
+
+       El rel="noopener noreferrer" no es decorativo. Sin él, la página de
+       destino puede manipular esta a través de window.opener, y además se le
+       envía la URL de procedencia en la cabecera Referer.                   -->
+  <p class="pie__enlaces">
+    <a class="pie__enlace" id="enlace-analisis" href="WEB-HOLDER"
+       target="_blank" rel="noopener noreferrer" hidden>
+      Análisis histórico de retrasos
+    </a>
+  </p>
+
   <p class="pie__dato" id="pie-version"></p>
 </footer>
 
