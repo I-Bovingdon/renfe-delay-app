@@ -112,12 +112,8 @@ class ModeloRetrasos:
             "moving": moving,
             "own_train_delay_so_far_s": retraso_propio,
             "line_delay_mean_30m_s": f.get("line_delay_mean_30m_s"),
-            "num_alertas_t0": f.get("alerts_line_30m"),
+            "num_alertas_t0": f.get("alerts_active_line"),
             "temp_aire_c_t0": f.get("temp_c"),
-            # Con la latencia de AEMET este valor detecta la lluvia que ya cayó, no
-            # la que está cayendo. El entrenamiento usó exactamente el mismo dato
-            # retrasado (merge_asof backward sobre captura_ts), así que enviarlo es
-            # lo correcto y enviar un nulo sería el skew. Ver la cabecera de meteo.py.
             "precip_mm_t0": f.get("precip_mm_1h"),
             "stop_sequence": f["dest_stop_sequence"],
             "trip_total_stops": f["trip_total_stops"],
@@ -136,22 +132,18 @@ class ModeloRetrasos:
             # presentes en el feed, que es un orden de magnitud menor. Un conteo con
             # la escala equivocada es peor que un nulo.
             "n_capturas_line_30m": None,
-            # CORRECCIÓN F8. El modelo se entrenó con la velocidad MEDIA del viento
-            # (raw 'vv' -> viento_vel_ms), no con la racha. El contrato v1.1.0 ya
-            # envía la magnitud correcta en wind_speed_ms, y FuenteMeteo aplica el
-            # mismo fillna(0) que el pipeline de entrenamiento cuando falta.
-            "viento_vel_ms_t0": f.get("wind_speed_ms"),
+            # El modelo se entrenó con la velocidad MEDIA del viento; la caché de la
+            # interfaz guarda la RACHA máxima.
+            "viento_vel_ms_t0": None,
 
-            # --- Incidencias (F8) ---
-            # Binarias 0/1 sobre la ventana de 30 min de la línea. Llegan del
-            # almacén de alertas, clasificadas con el clasificador que replica el
-            # del entrenamiento (ver alertas.py, PATRONES_TIPO_MODELO). Nunca son
-            # nulas: el pipeline hace fillna(0) y el modelo no vio nulos aquí.
-            "alerta_SUPRESION_t0": f.get("alert_supresion_30m"),
-            "alerta_AVERIA_t0": f.get("alert_averia_30m"),
-            "alerta_OBRAS_t0": f.get("alert_obras_30m"),
-            "alerta_RETRASO_t0": f.get("alert_retraso_30m"),
-            "alerta_SERVICIO_BUS_t0": f.get("alert_servicio_bus_30m"),
+            # --- Aún no disponibles en la interfaz ---
+            # Los desgloses de alerta por tipo llegarán con la pantalla de alertas,
+            # que aplica la misma clasificación por expresiones regulares.
+            "alerta_SUPRESION_t0": None,
+            "alerta_AVERIA_t0": None,
+            "alerta_OBRAS_t0": None,
+            "alerta_RETRASO_t0": None,
+            "alerta_SERVICIO_BUS_t0": None,
 
             # El calendario de eventos no está integrado en el servicio.
             "num_eventos": None,

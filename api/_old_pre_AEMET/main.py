@@ -42,7 +42,6 @@ from fastapi.staticfiles import StaticFiles
 
 import alertas
 import features
-import meteo as meteo_mod
 from catalogo import Catalogo
 from estado_red import INTERVALO_REFRESCO_S, CacheContexto
 from fuente_raw import FuenteRaw
@@ -125,28 +124,15 @@ async def lifespan(app: FastAPI):
     posiciones.refrescar()            # el endpoint ya responde desde el primer segundo
     estado["posiciones"] = posiciones
 
-    # Meteorología: cuarta fuente del proyecto y cuarto dominio de fallo. AEMET
-    # publica una vez por hora con 1,5-4 h de latencia, una cadencia que no tiene
-    # nada que ver con la del feed de RENFE, así que comparte tan poco con el resto
-    # que meterla en CacheContexto solo acoplaría fallos.
-    fuente_meteo = meteo_mod.FuenteMeteo(cat)
-    if not fuente_meteo.refrescar():
-        log.error("La meteorología no se pudo cargar en el arranque: %s",
-                  fuente_meteo.ultimo_error)
-    estado["meteo"] = fuente_meteo
-
     tarea = asyncio.create_task(_refresco_periodico(cache))
     tarea_mapa = asyncio.create_task(_refresco_posiciones(posiciones))
-    tarea_meteo = asyncio.create_task(_refresco_meteo(fuente_meteo))
     log.info(
-        "API lista. Refresco de contexto cada %d s, de posiciones cada %d s, "
-        "de meteorología cada %d s.",
-        INTERVALO_REFRESCO_S, INTERVALO_MAPA_S, meteo_mod.INTERVALO_METEO_S,
+        "API lista. Refresco de contexto cada %d s, de posiciones cada %d s.",
+        INTERVALO_REFRESCO_S, INTERVALO_MAPA_S,
     )
 
     yield
 
-    tarea_meteo.cancel()
     tarea_mapa.cancel()
     tarea.cancel()
     estado["alertas"].detener()  # type: ignore[union-attr]
@@ -190,23 +176,6 @@ async def _refresco_posiciones(fuente: FuentePosiciones) -> None:
             raise
         except Exception:  # noqa: BLE001
             log.exception("Error refrescando posiciones; se reintenta en el siguiente ciclo")
-
-
-async def _refresco_meteo(fuente) -> None:
-    """Refresca la observación de AEMET en segundo plano, para siempre.
-
-    Cada ciclo compara el nombre del último fichero con el ya leído: mientras el
-    colector no escriba una captura nueva, el ciclo no abre nada. El coste real es
-    un `scandir` cada diez minutos y un parseo de 49 ms una vez por hora.
-    """
-    while True:
-        try:
-            await asyncio.sleep(meteo_mod.INTERVALO_METEO_S)
-            await asyncio.to_thread(fuente.refrescar)
-        except asyncio.CancelledError:
-            raise
-        except Exception:  # noqa: BLE001
-            log.exception("Error refrescando meteorología; se reintenta en el siguiente ciclo")
 
 
 app = FastAPI(
@@ -295,11 +264,7 @@ def consultar(peticion: ConsultaTrayecto):
     # Un tramo por trayecto mientras solo haya directos. Cuando entren los transbordos,
     # esta lista tendrá varios por trayecto y el resto del código no cambia.
     tramos = [tr for t in trayectos for tr in t.tramos]
-    filas = features.construir_filas(
-        tramos, t0, cat.gtfs_version, cache, request_id,
-        fuente_meteo=estado["meteo"],
-        almacen_alertas=estado["alertas"],
-    )
+    filas = features.construir_filas(tramos, t0, cat.gtfs_version, cache, request_id)
 
     try:
         predicciones = predictor.predict(filas)
@@ -443,7 +408,6 @@ def salud():
         },
         "contexto": cache.salud(),
         "posiciones": estado["posiciones"].estado()["feed"],  # type: ignore[attr-defined]
-        "meteo": estado["meteo"].salud(),  # type: ignore[attr-defined]
         "predictor": {"backend": estado["predictor"].backend_nombre},  # type: ignore[attr-defined]
     }
 

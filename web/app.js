@@ -372,17 +372,19 @@ function pintarResultado(datos) {
   // como una avería puntual es falso y además enseña al usuario a ignorar el
   // aviso.
   //
-  // F8 (13/09): la meteorología sale de esta lista. Desde el despliegue de
-  // meteo.py alimenta al modelo con la observación de AEMET más reciente de la
-  // estación asignada al destino, así que "meteo" en degraded_blocks vuelve a
-  // significar lo que dice: la fuente existe y hoy ha fallado. La precipitación
-  // se envía con la latencia de publicación de AEMET, que es la misma con la
-  // que entrenó el modelo; eso es una limitación declarada en la memoria, no un
-  // aviso de pantalla.
+  // F8 (13/09): salen de esta lista las dos que quedaban. La meteorología
+  // alimenta al modelo con la observación de AEMET más reciente de la estación
+  // asignada al destino; las incidencias, con la ventana de 30 minutos de la
+  // línea calculada sobre el mismo índice que pinta la pantalla de alertas. Las
+  // cuatro fuentes del proyecto llegan ya al modelo, así que cualquier bloque
+  // que aparezca en degraded_blocks es por definición un fallo de hoy.
+  //
+  // El mecanismo se conserva vacío a propósito: si mañana se añade una quinta
+  // fuente y entra por fases, este es su sitio.
   //
   // Transitoria: la fuente existe y hoy ha fallado. Eso sí es una degradación
   // y tiene que decirse como tal.
-  const ESTRUCTURALES = new Set(["alertas"]);
+  const ESTRUCTURALES = new Set();
 
   const estructurales = [...bloques].filter((b) => ESTRUCTURALES.has(b));
   const transitorios = [...bloques].filter((b) => !ESTRUCTURALES.has(b));

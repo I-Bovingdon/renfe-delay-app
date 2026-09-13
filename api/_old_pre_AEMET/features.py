@@ -21,7 +21,6 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-import alertas as alertas_mod
 import calendario
 from contrato import (
     CONTRACT_VERSION,
@@ -119,19 +118,17 @@ def construir_fila(
 
     # --- Meteorología ---
     if meteo:
-        for clave in ("temp_c", "precip_mm_1h", "wind_speed_ms"):
+        for clave in ("temp_c", "precip_mm_1h", "wind_gust_ms"):
             fila[clave] = meteo.get(clave)
     else:
         degradados.append("meteo")
 
     # --- Incidencias ---
-    # Las seis columnas viajan SIEMPRE con valor, incluso con el feed caído: el
-    # pipeline de entrenamiento hace fillna(0) y el modelo no vio nunca un nulo
-    # aquí. Lo que se degrada es el AVISO al usuario, no la entrada del modelo.
-    # Es la diferencia con la meteorología, donde el nulo sí está dentro de la
-    # distribución de entrenamiento.
-    fila.update(alertas if alertas is not None else alertas_mod.ALERTAS_CERO)
-    if alertas is None:
+    if alertas:
+        fila["alerts_active_line"] = alertas.get("alerts_active_line")
+        fila["alerts_active_stop"] = alertas.get("alerts_active_stop", 0)
+        fila["alert_severity_max"] = alertas.get("alert_severity_max", 0.0)
+    else:
         degradados.append("alertas")
 
     fila[DEGRADED_BLOCKS_FIELD] = degradados
@@ -147,21 +144,12 @@ def construir_filas(
     gtfs_version: str,
     cache: Any,
     request_id: str | None = None,
-    fuente_meteo: Any = None,
-    almacen_alertas: Any = None,
 ) -> list[dict[str, Any]]:
     """Construye las filas de varios tramos leyendo el contexto de la caché.
 
     Se envían todas en una sola petición al modelo: el coste de una llamada por lotes
     es prácticamente el mismo que el de una individual.
     """
-    # La ventana de incidencias se calcula UNA vez por consulta, no por tramo:
-    # depende de t0 y de la línea, y recorrer el índice de alertas cuatro veces
-    # para el mismo instante sería tirar trabajo.
-    ventana_alertas = (
-        almacen_alertas.ventana_modelo(t0_utc) if almacen_alertas is not None else None
-    )
-
     filas = []
     for tramo in tramos:
         filas.append(
@@ -170,24 +158,8 @@ def construir_filas(
                 t0_utc=t0_utc,
                 gtfs_version=gtfs_version,
                 estado_linea=cache.estado_linea(tramo.line_id),
-                # F8: la meteorología ya NO viene de la caché de estado de red, que
-                # la devolvía vacía. Viene de FuenteMeteo, que lee el raw de AEMET
-                # en su propia tarea de fondo. Si no se inyecta (tests, pruebas del
-                # módulo), el bloque queda degradado, que es el comportamiento
-                # anterior y sigue siendo correcto.
-                meteo=(
-                    fuente_meteo.observacion(tramo.destino_stop_id)
-                    if fuente_meteo is not None else None
-                ),
-                # F8: las incidencias vienen del almacén que alimenta la
-                # pantalla de alertas, no de la caché de estado de red, que las
-                # devolvía vacías. El cruce es por igualdad exacta de línea,
-                # ramas incluidas, porque es lo que hacía el merge_asof del
-                # entrenamiento. Ver el bloque RAMAS DE LÍNEA en alertas.py.
-                alertas=(
-                    ventana_alertas.get(tramo.line_id, alertas_mod.ALERTAS_CERO)
-                    if ventana_alertas is not None else None
-                ),
+                meteo=cache.meteo(tramo.destino_stop_id),
+                alertas=cache.alertas(tramo.line_id),
                 # F7: estado real del tren, leído del feed por FuenteRaw. El cruce
                 # feed <-> catálogo lo resuelve la caché por núcleo del trip_id.
                 estado_propio=cache.estado_propio(tramo.trip_id),

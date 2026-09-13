@@ -142,6 +142,82 @@ def clasificar_tipo(texto: str) -> str:
     return "OTRO"
 
 
+# ---------------------------------------------------------------------------
+# CLASIFICACIÓN PARA EL MODELO  ·  NO MODIFICAR SIN REENTRENAR
+# ---------------------------------------------------------------------------
+# Este segundo clasificador NO es el de la pantalla y no debe unificarse con
+# él. Replica literalmente el `np.select` de `limpiar_alertas` en
+# `cercanias_pipeline.py`, incluidos su orden de precedencia y sus patrones
+# exactos, porque el modelo desplegado aprendió con esa clasificación y no con
+# otra.
+#
+# Dos diferencias deliberadas respecto al clasificador de pantalla:
+#
+#   1. NO existe el tipo RESOLUCION. El entrenamiento no lo tenía, así que un
+#      aviso de "Subsanada la avería..." caía en AVERIA por la palabra
+#      "avería". Aquí cae exactamente igual. Mapearlo al tipo que le habría
+#      tocado no es una interpretación: es lo que ocurría.
+#   2. Los patrones van SIN corregir. La pantalla usa `suprimid`, que recoge
+#      "suprimida" y "suprimidos"; el entrenamiento usaba `suprimido`, que se
+#      deja "suprimida" fuera. Corregirlo aquí mejoraría la clasificación y
+#      empeoraría la predicción, porque el modelo no vio esas filas marcadas.
+#
+# Consecuencia práctica: la pantalla puede mejorar su clasificación cuando
+# haga falta sin alterar en silencio las entradas del modelo.
+TIPOS_MODELO = ("SUPRESION", "AVERIA", "SERVICIO_BUS", "OBRAS", "RETRASO")
+
+PATRONES_TIPO_MODELO = tuple(
+    (tipo, re.compile(patron, re.IGNORECASE))
+    for tipo, patron in (
+        ("SUPRESION", r"suprimido|no presta servicio|sin circulación|no circula"),
+        ("AVERIA", r"avería|averia|incidencia técnica"),
+        ("SERVICIO_BUS", r"autobús|autobus|plan alternativo"),
+        ("OBRAS", r"obras|reajusta|mejora infraestructura"),
+        ("RETRASO", r"demora|retraso|retard"),
+    )
+)
+
+# Ventana de agregación. Valor de CONTRATO: el entrenamiento usa
+# MARGEN_ALERTAS_SEGUNDOS * 6 = 30 min. Cambiarlo aquí sin reentrenar hace que
+# las columnas dejen de significar lo mismo.
+VENTANA_MODELO_S = 30 * 60
+
+# Nombre de las seis columnas tal como viajan en el contrato de predicción.
+COLUMNA_NUM_ALERTAS = "alerts_line_30m"
+COLUMNAS_TIPO = {t: f"alert_{t.lower()}_30m" for t in TIPOS_MODELO}
+
+# Fila de ceros. El pipeline hace fillna(0) sobre las seis columnas, así que el
+# modelo NUNCA vio un nulo en ellas: la ausencia de incidencias es un cero.
+ALERTAS_CERO: dict[str, int] = {COLUMNA_NUM_ALERTAS: 0}
+ALERTAS_CERO.update({c: 0 for c in COLUMNAS_TIPO.values()})
+
+# RAMAS DE LÍNEA: SE CASA POR IGUALDAD EXACTA, sin normalizar la rama.
+#
+# Verificado sobre `cercanias_pipeline.py` y sobre las categorías del modelo
+# desplegado. En el entrenamiento:
+#
+#   - `linea` de cada fila sale del trip_id del GTFS y SÍ trae rama. El modelo
+#     conoce once categorías: C1, C2, C3, C4, C4a, C4b, C5, C7, C8a, C8b y C10.
+#   - `linea_afectada` de cada alerta sale del hashtag `#MadC(\d+[ab]?)`, que en
+#     la práctica publica RENFE sin rama: "#MadC4".
+#   - El cruce es `merge_asof(..., by="linea")`, igualdad exacta, y después
+#     `fillna(0)`.
+#
+# Consecuencia: una alerta de "#MadC4" NUNCA alcanzó a las filas de C4a ni C4b,
+# que se quedaron con ceros. Normalizar la rama en servicio para "arreglarlo"
+# activaría columnas que el modelo aprendió apagadas en esos trayectos, que es
+# justo el desajuste que este módulo existe para evitar. Queda declarado como
+# limitación heredada de la tabla de entrenamiento.
+
+
+def clasificar_tipo_modelo(texto: str) -> str:
+    """Tipo de incidencia SEGÚN EL ENTRENAMIENTO. Ver el bloque de arriba."""
+    for tipo, patron in PATRONES_TIPO_MODELO:
+        if patron.search(texto):
+            return tipo
+    return "OTRO"
+
+
 def _texto_alerta(alerta: dict) -> str:
     """Extrae el texto en castellano de `descriptionText`, con `headerText` de
     reserva. En este feed `description_text` viene al 0 % de nulos y
@@ -238,6 +314,9 @@ def clasificar_alerta(entity_id: str, alerta: dict,
         "id": entity_id,
         "texto": texto,
         "tipo": tipo,
+        # Segunda clasificación, la que consume el modelo. Se calcula aquí, una
+        # sola vez por alerta, y no en cada petición.
+        "tipo_modelo": clasificar_tipo_modelo(texto),
         "impacto": IMPACTO_POR_TIPO.get(tipo, "BAJO"),
         "planificada": bool(RE_PLANIFICADA.search(texto)),
         "accesibilidad": accesibilidad,
@@ -461,6 +540,82 @@ class AlmacenAlertas:
 
     def detener(self) -> None:
         self._parar.set()
+
+    def ventana_modelo(
+        self,
+        t0_utc: datetime | None = None,
+        ahora: datetime | None = None,
+    ) -> dict[str, dict[str, int]] | None:
+        """Las seis columnas de incidencias por línea, listas para el modelo.
+
+        Devuelve {código base de línea: {alerts_line_30m, alert_<tipo>_30m...}}
+        con SOLO las líneas que tienen alguna incidencia en la ventana. Las
+        demás valen cero y las rellena quien construye la fila.
+
+        Devuelve None si el feed no es utilizable (sin datos o caduco). En ese
+        caso quien llama envía ceros igualmente, porque el modelo nunca vio un
+        nulo en estas columnas, y marca el bloque como degradado para que la
+        interfaz avise al usuario. La bandera de degradación no es una feature,
+        así que se puede ser honesto con la persona sin mentirle al modelo.
+
+        SEMÁNTICA REPLICADA del entrenamiento (§4.1 del pipeline):
+
+          - `alert_<tipo>_30m` es binaria: ¿hubo alguna alerta de ese tipo en
+            esa línea en los 30 minutos anteriores a t0? Es el
+            `rolling("30min").max()` sobre la bandera del tipo.
+          - `alerts_line_30m` cuenta `entity_id` DISTINTOS, es decir avisos
+            distintos, no filas ni rutas informadas.
+          - Todo por línea. Ni por parada ni por red completa.
+
+        Única aproximación: el índice guarda la primera y la última vez que se
+        vio cada alerta, no todas las capturas intermedias, de modo que una
+        alerta que desapareciese y reapareciese dentro de la misma ventana se
+        contaría como presente durante toda ella. Con t0 igual al instante de
+        la consulta ese caso no puede darse, porque la última vista nunca es
+        posterior a ahora.
+
+        La accesibilidad se excluye: el entrenamiento la filtraba como ruido
+        con PALABRAS_ALERTAS_RUIDO antes de clasificar.
+
+        Las claves son la línea tal cual la publica el feed, sin normalizar la
+        rama. Ver el bloque RAMAS DE LÍNEA al principio del módulo.
+        """
+        ahora = ahora or datetime.now(timezone.utc)
+        # t0 puede venir en el futuro (el usuario pide "salgo dentro de 30
+        # min"). Del futuro no hay incidencias publicadas, así que la ventana
+        # se ancla en el último instante del que hay información. Es el mismo
+        # criterio que usa la meteorología con el merge_asof hacia atrás.
+        t0 = min(t0_utc, ahora) if t0_utc is not None else ahora
+        desde = t0 - timedelta(seconds=VENTANA_MODELO_S)
+
+        with self._lock:
+            ultima = self._ultima_captura
+            registros = list(self._indice.values())
+
+        if ultima is None or (ahora - ultima).total_seconds() > MARGEN_FEED_CADUCO_S:
+            return None
+
+        acumulado: dict[str, tuple[set, set]] = {}
+        for reg in registros:
+            if reg["accesibilidad"]:
+                continue
+            if reg["primera_vez"] > t0 or reg["ultima_vez"] < desde:
+                continue
+            for linea in reg["lineas"]:
+                # Igualdad exacta con la línea del trayecto, ramas incluidas.
+                # Ver el bloque RAMAS DE LÍNEA más arriba.
+                ids, tipos = acumulado.setdefault(linea, (set(), set()))
+                ids.add(reg["id"])
+                if reg["tipo_modelo"] in TIPOS_MODELO:
+                    tipos.add(reg["tipo_modelo"])
+
+        salida: dict[str, dict[str, int]] = {}
+        for base, (ids, tipos) in acumulado.items():
+            fila = {COLUMNA_NUM_ALERTAS: len(ids)}
+            for tipo, columna in COLUMNAS_TIPO.items():
+                fila[columna] = 1 if tipo in tipos else 0
+            salida[base] = fila
+        return salida
 
     def estado(self, ahora: datetime | None = None) -> dict:
         """Estado listo para serializar en el endpoint.

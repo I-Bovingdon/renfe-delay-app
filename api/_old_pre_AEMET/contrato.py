@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 # Versión del contrato. Cambiar SOLO con acuerdo explícito del equipo de modelado.
-CONTRACT_VERSION = "1.2.0"
+CONTRACT_VERSION = "1.0.0"
 
 # --------------------------------------------------------------------------------------
 # Metadatos: viajan en cada fila para trazabilidad, pero NO son features del modelo.
@@ -68,26 +68,11 @@ FEATURE_SPEC: tuple[tuple[str, str, str, bool, str], ...] = (
     # --- Meteorología (estación AEMET asignada a la parada de destino) ---
     ("temp_c",               "float", "C",  False, "temperatura del aire"),
     ("precip_mm_1h",         "float", "mm", False, "precipitación acumulada 1 h"),
-    # v1.1.0: era wind_gust_ms (racha, raw 'vmax'). El modelo entrenó con la
-    # velocidad MEDIA (viento_vel_ms, raw 'vv'), así que el nombre anterior
-    # describía una magnitud distinta de la que espera el modelo.
-    ("wind_speed_ms",        "float", "m/s", False, "velocidad media del viento (AEMET 'vv')"),
-    # --- Incidencias (v1.2.0) ---
-    # Ventana de 30 min anterior a t0, POR LÍNEA, replicando el rolling del
-    # pipeline de entrenamiento. Las seis viajan SIEMPRE con valor: la ausencia
-    # de incidencias es un cero, nunca un nulo, porque el pipeline hace
-    # fillna(0) y el modelo no vio nulos en estas columnas. Ver alertas.py.
-    #
-    # Sustituyen a alerts_active_line / alerts_active_stop / alert_severity_max
-    # de la v1.0.0: la primera existía con una semántica distinta (alertas
-    # "activas" en vez de vistas en la ventana) y las otras dos nunca se
-    # poblaron, porque el modelo desplegado no tiene columna de severidad.
-    ("alerts_line_30m",      "int",   "-",  False, "nº de avisos DISTINTOS de la línea en 30 min"),
-    ("alert_supresion_30m",  "int",   "0/1", False, "hubo alerta de SUPRESION en la línea en 30 min"),
-    ("alert_averia_30m",     "int",   "0/1", False, "hubo alerta de AVERIA en la línea en 30 min"),
-    ("alert_servicio_bus_30m", "int", "0/1", False, "hubo alerta de SERVICIO_BUS en la línea en 30 min"),
-    ("alert_obras_30m",      "int",   "0/1", False, "hubo alerta de OBRAS en la línea en 30 min"),
-    ("alert_retraso_30m",    "int",   "0/1", False, "hubo alerta de RETRASO en la línea en 30 min"),
+    ("wind_gust_ms",         "float", "m/s", False, "racha máxima de viento"),
+    # --- Incidencias (salida del NLP; constante 0 hasta que se entregue) ---
+    ("alerts_active_line",   "int",   "-",  False, "nº de alertas activas de la línea"),
+    ("alerts_active_stop",   "int",   "-",  False, "nº de alertas activas de la parada"),
+    ("alert_severity_max",   "float", "0-1", False, "severidad máxima estimada por NLP"),
 )
 
 # Bandera de degradación: lista de bloques cuya fuente no estaba disponible.
