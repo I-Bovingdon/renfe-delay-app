@@ -11,6 +11,12 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 
+<!-- Leaflet 1.9.4 desde CDN. Sin proceso de compilación, igual que el resto:
+     un <link> y un <script>. El SRI protege frente a una CDN comprometida. -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin="">
+
 <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
@@ -28,7 +34,7 @@
       <button class="nav__item" data-pantalla="alertas" type="button">
         Alertas<span class="nav__badge" id="badge-alertas" hidden>0</span>
       </button>
-      <button class="nav__item nav__item--deshabilitado" data-pantalla="mapa" type="button" disabled>
+      <button class="nav__item" data-pantalla="mapa" type="button">
         Mapa
       </button>
     </nav>
@@ -180,13 +186,30 @@
 
   </div><!-- /pantalla-alertas -->
 
-  <!-- ======================== PANTALLA: MAPA =========================== -->
+  <!-- ======================== PANTALLA: MAPA ===========================
+       Los cinco id de esta sección los busca app.js por nombre. Si se renombra
+       alguno, hay que renombrarlo también allí:
+         mapa            contenedor donde Leaflet monta el lienzo
+         filtros-mapa    fila de chips por línea, la rellena pintarFiltrosMapa()
+         aviso-mapa      banda de feed caduco o vacío
+         aviso-mapa-texto  su texto
+         mapa-pie        recuento de trenes y frescura del dato                -->
   <div class="pantalla" id="pantalla-mapa" hidden>
-    <section class="panel panel--estado">
-      <p class="estado__titulo">Mapa de la red</p>
-      <p class="estado__texto">Próximamente: estado en tiempo real de cada línea.</p>
+
+    <div class="aviso-feed" id="aviso-mapa" role="alert" hidden>
+      <p class="aviso-feed__texto" id="aviso-mapa-texto"></p>
+    </div>
+
+    <div class="filtros-linea" id="filtros-mapa" hidden></div>
+
+    <section class="panel panel--mapa" aria-labelledby="titulo-mapa">
+      <h2 class="oculto" id="titulo-mapa">Mapa de la red en tiempo real</h2>
+      <div class="mapa" id="mapa" role="application"
+           aria-label="Mapa de las líneas de Cercanías y los trenes en circulación"></div>
+      <p class="mapa__pie" id="mapa-pie" aria-live="polite"></p>
     </section>
-  </div>
+
+  </div><!-- /pantalla-mapa -->
 
 </main>
 
@@ -195,6 +218,10 @@
   <p class="pie__dato" id="pie-version"></p>
 </footer>
 
+<!-- Leaflet va ANTES que app.js: app.js referencia L al construir el mapa. -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
 <script src="app.js"></script>
 </body>
 </html>
