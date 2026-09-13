@@ -114,6 +114,10 @@ class ModeloRetrasos:
             "line_delay_mean_30m_s": f.get("line_delay_mean_30m_s"),
             "num_alertas_t0": f.get("alerts_active_line"),
             "temp_aire_c_t0": f.get("temp_c"),
+            # Con la latencia de AEMET este valor detecta la lluvia que ya cayó, no
+            # la que está cayendo. El entrenamiento usó exactamente el mismo dato
+            # retrasado (merge_asof backward sobre captura_ts), así que enviarlo es
+            # lo correcto y enviar un nulo sería el skew. Ver la cabecera de meteo.py.
             "precip_mm_t0": f.get("precip_mm_1h"),
             "stop_sequence": f["dest_stop_sequence"],
             "trip_total_stops": f["trip_total_stops"],
@@ -132,9 +136,11 @@ class ModeloRetrasos:
             # presentes en el feed, que es un orden de magnitud menor. Un conteo con
             # la escala equivocada es peor que un nulo.
             "n_capturas_line_30m": None,
-            # El modelo se entrenó con la velocidad MEDIA del viento; la caché de la
-            # interfaz guarda la RACHA máxima.
-            "viento_vel_ms_t0": None,
+            # CORRECCIÓN F8. El modelo se entrenó con la velocidad MEDIA del viento
+            # (raw 'vv' -> viento_vel_ms), no con la racha. El contrato v1.1.0 ya
+            # envía la magnitud correcta en wind_speed_ms, y FuenteMeteo aplica el
+            # mismo fillna(0) que el pipeline de entrenamiento cuando falta.
+            "viento_vel_ms_t0": f.get("wind_speed_ms"),
 
             # --- Aún no disponibles en la interfaz ---
             # Los desgloses de alerta por tipo llegarán con la pantalla de alertas,

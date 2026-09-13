@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 # Versión del contrato. Cambiar SOLO con acuerdo explícito del equipo de modelado.
-CONTRACT_VERSION = "1.0.0"
+CONTRACT_VERSION = "1.1.0"
 
 # --------------------------------------------------------------------------------------
 # Metadatos: viajan en cada fila para trazabilidad, pero NO son features del modelo.
@@ -68,7 +68,10 @@ FEATURE_SPEC: tuple[tuple[str, str, str, bool, str], ...] = (
     # --- Meteorología (estación AEMET asignada a la parada de destino) ---
     ("temp_c",               "float", "C",  False, "temperatura del aire"),
     ("precip_mm_1h",         "float", "mm", False, "precipitación acumulada 1 h"),
-    ("wind_gust_ms",         "float", "m/s", False, "racha máxima de viento"),
+    # v1.1.0: era wind_gust_ms (racha, raw 'vmax'). El modelo entrenó con la
+    # velocidad MEDIA (viento_vel_ms, raw 'vv'), así que el nombre anterior
+    # describía una magnitud distinta de la que espera el modelo.
+    ("wind_speed_ms",        "float", "m/s", False, "velocidad media del viento (AEMET 'vv')"),
     # --- Incidencias (salida del NLP; constante 0 hasta que se entregue) ---
     ("alerts_active_line",   "int",   "-",  False, "nº de alertas activas de la línea"),
     ("alerts_active_stop",   "int",   "-",  False, "nº de alertas activas de la parada"),

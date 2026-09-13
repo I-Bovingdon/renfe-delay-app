@@ -118,7 +118,7 @@ def construir_fila(
 
     # --- Meteorología ---
     if meteo:
-        for clave in ("temp_c", "precip_mm_1h", "wind_gust_ms"):
+        for clave in ("temp_c", "precip_mm_1h", "wind_speed_ms"):
             fila[clave] = meteo.get(clave)
     else:
         degradados.append("meteo")
@@ -144,6 +144,7 @@ def construir_filas(
     gtfs_version: str,
     cache: Any,
     request_id: str | None = None,
+    fuente_meteo: Any = None,
 ) -> list[dict[str, Any]]:
     """Construye las filas de varios tramos leyendo el contexto de la caché.
 
@@ -158,7 +159,15 @@ def construir_filas(
                 t0_utc=t0_utc,
                 gtfs_version=gtfs_version,
                 estado_linea=cache.estado_linea(tramo.line_id),
-                meteo=cache.meteo(tramo.destino_stop_id),
+                # F8: la meteorología ya NO viene de la caché de estado de red, que
+                # la devolvía vacía. Viene de FuenteMeteo, que lee el raw de AEMET
+                # en su propia tarea de fondo. Si no se inyecta (tests, pruebas del
+                # módulo), el bloque queda degradado, que es el comportamiento
+                # anterior y sigue siendo correcto.
+                meteo=(
+                    fuente_meteo.observacion(tramo.destino_stop_id)
+                    if fuente_meteo is not None else None
+                ),
                 alertas=cache.alertas(tramo.line_id),
                 # F7: estado real del tren, leído del feed por FuenteRaw. El cruce
                 # feed <-> catálogo lo resuelve la caché por núcleo del trip_id.
