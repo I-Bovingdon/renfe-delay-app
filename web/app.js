@@ -362,16 +362,42 @@ function pintarResultado(datos) {
   );
   const nombres = { meteo: "meteorología", estado_red: "estado de la red",
                     alertas: "incidencias", estado_propio: "posición del tren" };
-  const nota = $("nota-degradada");
-  if (bloques.size) {
-    nota.textContent =
-      "Predicción calculada sin " +
-      [...bloques].map((b) => nombres[b] || b).join(", ") +
-      ": esa información no estaba disponible en este momento.";
-    nota.hidden = false;
-  } else {
-    nota.hidden = true;
+
+  // Dos causas distintas, dos mensajes distintos.
+  //
+  // Estructural: la fuente NO está integrada todavía y no lo estará hoy. La
+  // meteorología de AEMET se publica con unas 13 h de latencia, inservible como
+  // contexto en tiempo real; las incidencias esperan a que se conecte el
+  // clasificador al cálculo de variables. Estos bloques faltan en TODAS las
+  // consultas, así que anunciarlos como una avería puntual es falso y además
+  // enseña al usuario a ignorar el aviso.
+  //
+  // Transitoria: la fuente existe y hoy ha fallado. Eso sí es una degradación
+  // y tiene que decirse como tal.
+  const ESTRUCTURALES = new Set(["meteo", "alertas"]);
+
+  const estructurales = [...bloques].filter((b) => ESTRUCTURALES.has(b));
+  const transitorios = [...bloques].filter((b) => !ESTRUCTURALES.has(b));
+
+  const frases = [];
+  if (transitorios.length) {
+    frases.push(
+      "No se ha podido usar " +
+      transitorios.map((b) => nombres[b] || b).join(", ") +
+      ": esa fuente no respondía al calcular la predicción."
+    );
   }
+  if (estructurales.length) {
+    frases.push(
+      "La predicción no incorpora " +
+      estructurales.map((b) => nombres[b] || b).join(" ni ") +
+      ": son fuentes que todavía no alimentan al modelo."
+    );
+  }
+
+  const nota = $("nota-degradada");
+  nota.textContent = frases.join(" ");
+  nota.hidden = frases.length === 0;
 
   // Enlace contextual a alertas si hay incidencias en las líneas del trayecto
   actualizarEnlaceAlertas();

@@ -202,6 +202,18 @@ body {
 
 .pantalla[hidden] { display: none; }
 
+/* El atributo `hidden` lo aplica el navegador como `display: none` desde su hoja
+   de usuario, que pierde frente a CUALQUIER regla de autor con `display`. Es
+   decir: `.enlace-alertas { display: flex }` deja el elemento visible aunque el
+   JavaScript le ponga `hidden`. Fue el fallo del bloque de incidencias del
+   trayecto, que aparecía siempre con el icono y el texto vacío.
+
+   Esta regla restituye el comportamiento esperado para toda la hoja. El
+   `!important` es necesario aquí y solo aquí: sin él habría que repetir un
+   `[hidden]` por cada clase que declare `display`, y la siguiente que se añada
+   volvería a fallar en silencio. */
+[hidden] { display: none !important; }
+
 .panel {
   background: var(--carta);
   border: 1px solid var(--niebla);
