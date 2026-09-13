@@ -31,7 +31,8 @@ Configuración (todo por variables de entorno del servicio, nunca en el reposito
     MISTRAL_API_KEY=...            credencial; vive SOLO en el .env del servidor
     CHAT_MODELO=ministral-8b-2512  versión fijada, nunca un alias '-latest'
     CHAT_PRESUPUESTO_DIA=400       llamadas al proveedor por día, tope global
-    CHAT_PETICIONES_MIN=8          llamadas por IP y minuto
+    CHAT_PETICIONES_MIN=15         llamadas por IP y minuto
+    CHAT_MIN_TRENES=3              trenes mínimos para que una media sea comparable
 
 TFM Cercanías RENFE · UCM · 2026
 """
@@ -79,7 +80,19 @@ MAX_TOKENS_SALIDA = 150       # la salida es un JSON pequeño; más es abuso
 MAX_TURNOS_HISTORIAL = 2      # evita que el contexto se rellene a base de mensajes
 
 PRESUPUESTO_DIA = int(os.getenv("CHAT_PRESUPUESTO_DIA", "400"))
-PETICIONES_MIN = int(os.getenv("CHAT_PETICIONES_MIN", "8"))
+
+# 15 por IP y minuto. El valor inicial de 8 se subió tras medirlo el 13/09: una
+# tanda de once preguntas seguidas agotaba la cuota en la octava. Una demostración
+# en vivo encadena preguntas más rápido que un usuario real, y el límite tiene que
+# frenar el abuso, no la defensa.
+PETICIONES_MIN = int(os.getenv("CHAT_PETICIONES_MIN", "15"))
+
+# Trenes mínimos en circulación para que la media de retraso de una línea se
+# considere representativa. Medido el 13/09: la C9 (servicio suspendido por obras,
+# y línea excluida del entrenamiento por falta de muestra) aparecía como la peor de
+# la red con 43 min de media calculados sobre un puñado de trenes. Un número
+# calculado sobre dos observaciones no es el estado de una línea.
+MIN_TRENES_REPRESENTATIVO = int(os.getenv("CHAT_MIN_TRENES", "3"))
 
 
 def habilitado() -> bool:
@@ -274,6 +287,19 @@ def _codigo_base(linea: str | None) -> str:
     sí las distingue. Es el mismo helper que ya existe en app.js."""
     n = _normalizar(linea or "")
     return n[:-1] if n and n[-1] in ("a", "b") else n
+
+
+def _recortar(texto: str, maximo: int) -> str:
+    """Recorta por el último espacio, no a mitad de palabra.
+
+    Un corte en seco ("el tren no circul") delata la plantilla y queda mal en una
+    demostración. Cuesta tres líneas evitarlo.
+    """
+    texto = (texto or "").strip()
+    if len(texto) <= maximo:
+        return texto
+    corte = texto[:maximo].rsplit(" ", 1)[0]
+    return (corte or texto[:maximo]).rstrip(" ,.;") + "…"
 
 
 def _minutos(segundos: float | None) -> str:
@@ -501,13 +527,14 @@ class AsistenteChat:
         cuerpo = "\n".join(
             f"· {i['tipo'].replace('_', ' ').capitalize()}"
             f"{' en ' + ', '.join(i['lineas']) if i['lineas'] else ''}: "
-            f"{i['texto'][:140]}"
+            f"{_recortar(i['texto'], 160)}"
             for i in activas[:3]
         )
         extra = f"\nY {len(activas) - 3} más." if len(activas) > 3 else ""
         return (f"Hay {len(activas)} incidencia{'s' if len(activas) > 1 else ''} "
                 f"activa{'s' if len(activas) > 1 else ''}:\n{cuerpo}{extra}"), \
-               {"tipo": "navegar", "pantalla": "alertas"}
+               {"tipo": "sugerir", "pantalla": "alertas",
+                "etiqueta": "Ver todas las incidencias"}
 
     def _h_alertas_linea(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
         lineas = self._lineas_de(ent.get("linea"))
@@ -522,9 +549,12 @@ class AsistenteChat:
         ]
         if not activas:
             return f"No hay incidencias activas publicadas en la {base}.", None
-        cuerpo = "\n".join(f"· {i['texto'][:160]}" for i in activas[:3])
-        return f"En la {base} hay {len(activas)} incidencia(s) activa(s):\n{cuerpo}", \
-               {"tipo": "navegar", "pantalla": "alertas"}
+        cuerpo = "\n".join(f"· {_recortar(i['texto'], 180)}" for i in activas[:3])
+        plural = "s" if len(activas) > 1 else ""
+        return (f"En la {base} hay {len(activas)} incidencia{plural} "
+                f"activa{plural}:\n{cuerpo}"), \
+               {"tipo": "sugerir", "pantalla": "alertas",
+                "etiqueta": f"Ver incidencias de la {base}"}
 
     def _h_estado_linea(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
         lineas = self._lineas_de(ent.get("linea"))
@@ -541,29 +571,70 @@ class AsistenteChat:
             return (f"No tengo datos recientes de la {base}. Puede que no haya "
                     f"trenes suyos circulando ahora mismo."), None
         media = sum(medias) / len(medias)
+        # La salvedad no es un adorno: con dos trenes, la media de una línea es una
+        # anécdota. Decirlo es más honesto que dar la cifra pelada.
+        cautela = ("" if trenes >= MIN_TRENES_REPRESENTATIVO else
+                   " Son pocos trenes, así que la media es poco representativa.")
         return (f"La {base} acumula un retraso medio de {_minutos(media)} en los "
-                f"últimos 30 minutos, con {trenes} trenes en circulación."), None
+                f"últimos 30 minutos, con {trenes} trenes en circulación."
+                f"{cautela}"), None
 
     def _h_ranking(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
-        """Peor y mejor línea AHORA. Se agrega por código base para no listar las
-        ramas por separado, que al usuario no le dicen nada."""
-        por_base: dict[str, list[float]] = {}
+        """Peor y mejor línea AHORA MISMO.
+
+        Dos criterios que no son cosméticos:
+
+        1. Se agrega por código base (C4a y C4b cuentan como C4). Al viajero no le
+           dice nada la rama, y separarlas partiría la muestra en dos.
+        2. Se EXIGE un mínimo de trenes en circulación. Sin ese filtro, una línea
+           con servicio suspendido y dos trenes residuales encabeza el ranking con
+           una media que no describe nada. Verificado el 13/09 con la C9.
+
+        El número de trenes viaja en la respuesta: un ranking sin el tamaño de la
+        muestra invita justo a la pregunta que no se quiere recibir en la defensa.
+        """
+        agregado: dict[str, dict[str, float]] = {}
         for l in self.lineas:
             datos = self.cache.estado_linea(l) or {}
             valor = datos.get("line_delay_mean_30m_s")
-            if valor is not None:
-                por_base.setdefault(_codigo_base(l).upper(), []).append(float(valor))
-        if not por_base:
-            return ("No tengo datos de estado de la red en este momento. El mapa "
-                    "muestra si hay trenes circulando."), None
-        medias = {k: sum(v) / len(v) for k, v in por_base.items()}
-        orden = sorted(medias.items(), key=lambda kv: kv[1], reverse=True)
-        peor, mejor = orden[0], orden[-1]
-        return (f"Ahora mismo la línea con más retraso medio es la {peor[0]}, con "
-                f"{_minutos(peor[1])} en los últimos 30 minutos. La que mejor va es "
-                f"la {mejor[0]}, con {_minutos(mejor[1])}. "
-                f"Datos de {len(medias)} líneas con trenes en circulación."), \
-               {"tipo": "navegar", "pantalla": "mapa"}
+            if valor is None:
+                continue
+            trenes = int(datos.get("line_active_trains_30m") or 0)
+            acc = agregado.setdefault(_codigo_base(l).upper(),
+                                      {"suma": 0.0, "n": 0, "trenes": 0})
+            # Media ponderada por trenes: una rama con 20 trenes pesa más que otra
+            # con 2, que es lo que significa "el retraso medio de la línea".
+            acc["suma"] += float(valor) * max(trenes, 1)
+            acc["n"] += max(trenes, 1)
+            acc["trenes"] += trenes
+
+        representativas = {
+            base: (a["suma"] / a["n"], a["trenes"])
+            for base, a in agregado.items()
+            if a["trenes"] >= MIN_TRENES_REPRESENTATIVO
+        }
+        descartadas = sorted(set(agregado) - set(representativas))
+
+        if len(representativas) < 2:
+            return ("No tengo suficientes líneas con trenes en circulación para "
+                    "compararlas ahora mismo. El mapa muestra el detalle."), None
+
+        orden = sorted(representativas.items(), key=lambda kv: kv[1][0], reverse=True)
+        (peor, (d_peor, t_peor)) = orden[0]
+        (mejor, (d_mejor, t_mejor)) = orden[-1]
+
+        nota = ""
+        if descartadas:
+            nota = (f" Se han excluido {', '.join(descartadas)} por tener menos de "
+                    f"{MIN_TRENES_REPRESENTATIVO} trenes en circulación: con tan "
+                    f"pocos, la media no es representativa.")
+
+        return (f"Ahora mismo la línea con más retraso medio es la {peor}, con "
+                f"{_minutos(d_peor)} en los últimos 30 minutos sobre {t_peor} trenes. "
+                f"La que mejor va es la {mejor}, con {_minutos(d_mejor)} sobre "
+                f"{t_mejor} trenes. Comparadas {len(representativas)} líneas.{nota}"), \
+               {"tipo": "sugerir", "pantalla": "mapa",
+                "etiqueta": "Ver el mapa de la red"}
 
     def _h_historico(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
         if self.historico is None:
@@ -628,10 +699,14 @@ class AsistenteChat:
         pantalla = ent.get("pantalla")
         if pantalla not in PANTALLAS:
             return "Puedo llevarte a llegada, alertas o mapa. ¿Cuál quieres?", None
-        nombres = {"llegada": "la pantalla de llegada estimada",
-                   "alertas": "las incidencias", "mapa": "el mapa de la red"}
-        return f"Te llevo a {nombres[pantalla]}.", \
-               {"tipo": "navegar", "pantalla": pantalla}
+        # Frases completas y no un diccionario de sustantivos: con "a " + nombre
+        # salía "Te llevo a el mapa".
+        nombres = {
+            "llegada": "Te llevo a la pantalla de llegada estimada.",
+            "alertas": "Te llevo a las incidencias.",
+            "mapa": "Te llevo al mapa de la red.",
+        }
+        return nombres[pantalla], {"tipo": "navegar", "pantalla": pantalla}
 
     # ==================================================================== fachada ===
     def responder(self, texto: str, ip: str, historial: list[dict] | None = None,
