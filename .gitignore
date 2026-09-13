@@ -223,3 +223,6 @@ modelo/
 datos/catalogo.json
 datos/catalogo_*.json
 datos/*.bak
+
+# Copias de seguridad locales, nunca versionadas
+api/_old_*/
