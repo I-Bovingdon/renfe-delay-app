@@ -18,12 +18,12 @@ import json
 import sys
 import unicodedata
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
 from estado_red import nucleo_trip
-from tiempo import fecha_de_servicio, ahora_utc
+from tiempo import fecha_de_servicio, ahora_utc, hora_gtfs_a_utc
 
 # Posiciones dentro de cada trip del formato compacto. Se leen del propio catálogo
 # ('formato_trips') para que un cambio de formato falle de forma ruidosa, no silenciosa.
@@ -205,6 +205,24 @@ class Catalogo:
             )
         conexiones.sort(key=lambda c: c.salida_s)
         return conexiones
+
+    def salida_cabecera_utc(
+        self, trip_id: str, fecha_servicio: date
+    ) -> datetime | None:
+        """Instante UTC en que el trip sale de su PRIMERA parada.
+
+        No es la salida de la parada del viajero: es cuándo arranca el tren su
+        recorrido. Es el ancla que usa el pipeline de entrenamiento para generar los
+        instantes de consulta de régimen B, así que es la referencia que decide si una
+        consulta cae dentro del dominio del modelo (ver contrato.ANTELACION_MAXIMA_SALIDA_S).
+
+        Devuelve None si el trip no está en el catálogo, y entonces quien llame decide:
+        no se puede afirmar que esté fuera de dominio algo que no se ha podido situar.
+        """
+        idx = self.trip_por_nucleo(nucleo_trip(trip_id), fecha_servicio)
+        if idx is None:
+            return None
+        return hora_gtfs_a_utc(fecha_servicio, self.trips[idx][self._I_SALIDAS][0])
 
     def paradas_de(self, idx_trip: int) -> list[str]:
         return self.trips[idx_trip][self._I_STOPS]

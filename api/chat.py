@@ -55,6 +55,7 @@ from typing import Any, Callable
 import requests
 
 import alertas as alertas_mod
+import contrato
 import features
 from resolver import resolver_trayecto
 from tiempo import MADRID, ahora_utc, formatear_local
@@ -532,9 +533,28 @@ class AsistenteChat:
         trayectos, aviso = resolver_trayecto(
             self.cat, origen["stop_id"], destino["stop_id"], t0
         )
+        # Mismo filtro de dominio que /api/consulta, y por la misma función: si el
+        # asistente ofreciera trenes que la pantalla descarta, chat e interfaz
+        # discreparían sobre la misma consulta.
+        nota_dominio = ""
+        fuera_de_dominio = 0
+        if trayectos:
+            trayectos, fuera_de_dominio = features.filtrar_por_dominio(
+                trayectos, self.cat, t0
+            )
+            if fuera_de_dominio and trayectos:
+                nota_dominio = ("\nSolo te doy los trenes que ya circulan o salen en "
+                                "la próxima media hora: son sobre los que puedo "
+                                "predecir.")
+
         if not trayectos:
-            # El aviso del resolutor ya distingue "no hay directo" de "no hay tren
-            # a esta hora". Se traslada tal cual: explicar, nunca inventar.
+            # Se distingue "no hay tren" de "los hay, pero fuera de mi dominio". El
+            # aviso del resolutor ya separa "no hay directo" de "no hay tren a esta
+            # hora", y se traslada tal cual: explicar, nunca inventar.
+            if fuera_de_dominio:
+                return ("Para ese trayecto no hay ningún tren que ya circule o salga "
+                        "en la próxima media hora, que es hasta donde puedo predecir. "
+                        "Los siguientes salen más tarde."), None
             return (aviso or "No he encontrado trenes para ese trayecto."), None
 
         tramos = [t.tramos[0] for t in trayectos[:2]]
@@ -546,6 +566,17 @@ class AsistenteChat:
 
         lineas_txt = []
         for tramo, fila, pred in zip(tramos, filas, predicciones):
+            if contrato.linea_sin_prediccion(tramo.line_id):
+                # Línea fuera del entrenamiento: horario oficial y nada más.
+                lineas_txt.append(
+                    f"· {tramo.line_id} · sale "
+                    f"{formatear_local(tramo.salida_teorica_utc)} y llega a "
+                    f"{destino['nombre']} a las "
+                    f"{formatear_local(tramo.llegada_teorica_utc)} según horario. "
+                    f"No predigo el retraso de esta línea: está excluida del modelo "
+                    f"por obras prolongadas."
+                )
+                continue
             retraso = _retraso_mostrado(pred.get("delay_s_p50"))
             llegada = tramo.llegada_teorica_utc + timedelta(seconds=retraso)
             lineas_txt.append(
@@ -573,7 +604,7 @@ class AsistenteChat:
                     " ni ".join(sorted(degradados)) + ".")
 
         cabecera = f"De {origen['nombre']} a {destino['nombre']}:\n"
-        return cabecera + "\n".join(lineas_txt) + nota, None
+        return cabecera + "\n".join(lineas_txt) + nota_dominio + nota, None
 
     def _h_alertas_red(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
         estado = self.alertas.estado()

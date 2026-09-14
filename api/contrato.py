@@ -13,6 +13,7 @@ TFM Cercanías RENFE · UCM · 2026
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 # Versión del contrato. Cambiar SOLO con acuerdo explícito del equipo de modelado.
@@ -106,6 +107,49 @@ PREDICTION_FIELDS: tuple[str, ...] = (
     "has_interval",   # False si el modelo v1 es puntual
     "model_version",  # versión del modelo registrado en MLflow
 )
+
+
+# --------------------------------------------------------------------------------------
+# DOMINIO DEL MODELO. Qué consultas puede responder sin extrapolar.
+#
+# El pipeline de entrenamiento genera los instantes de consulta de régimen B anclados a
+# la salida programada del trip desde su PRIMERA parada, con estos desfases:
+#     MINUTOS_ANTES_SALIDA_REGIMEN_B = [0, 30]
+# En régimen A, el instante de consulta es aquel en que el tren completó una parada.
+#
+# Consecuencia: no existe en el entrenamiento NINGUNA fila cuyo instante de consulta esté
+# más de 30 minutos antes de que el trip arranque. LightGBM no extrapola, así que una
+# consulta hecha con más antelación cae en la hoja terminal del mayor horizonte visto y
+# devuelve un número que no describe nada. Medido el 13/09: el sesgo pasa de -1,0 min por
+# debajo de una hora de horizonte a -4,8 min por encima de dos.
+#
+# El límite NO es sobre el horizonte. Un horizonte de dos horas es legítimo si el trip ya
+# circula aguas arriba, y de hecho la correlación con el retraso real es MAYOR en ese
+# tramo (r = +0,43) que por debajo de una hora (r = -0,02). Lo que queda fuera de dominio
+# es la antelación respecto a la SALIDA, no la distancia hasta la llegada.
+#
+# Revisar con cada reentrenamiento: depende de MINUTOS_ANTES_SALIDA_REGIMEN_B.
+ANTELACION_MAXIMA_SALIDA_S = float(os.getenv("ANTELACION_MAXIMA_SALIDA_S", 30 * 60))
+
+# Líneas que el modelo no vio al entrenar y sobre las que NO se predice. La C9 se excluyó
+# por falta de muestra, coherente con llevar en obras de reforma integral desde marzo de
+# 2026. Dar un número sobre una línea no entrenada es peor que no darlo: se muestra el
+# horario oficial y se avisa. Revisar con cada modelo nuevo.
+LINEAS_SIN_PREDICCION: frozenset[str] = frozenset(
+    c.strip().upper()
+    for c in os.getenv("LINEAS_SIN_PREDICCION", "C9").split(",")
+    if c.strip()
+)
+
+
+def linea_sin_prediccion(line_id: str | None) -> bool:
+    """Cierto si la línea está fuera del dominio. Ignora la rama: 'C4a' -> 'C4'."""
+    if not line_id:
+        return False
+    c = str(line_id).strip().upper()
+    if c and c[-1] in ("A", "B"):
+        c = c[:-1]
+    return c in LINEAS_SIN_PREDICCION
 
 
 class ContractError(ValueError):

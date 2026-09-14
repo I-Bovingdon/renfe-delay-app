@@ -24,6 +24,7 @@ from typing import Any
 import alertas as alertas_mod
 import calendario
 from contrato import (
+    ANTELACION_MAXIMA_SALIDA_S,
     CONTRACT_VERSION,
     DEGRADED_BLOCKS_FIELD,
     empty_row,
@@ -31,6 +32,40 @@ from contrato import (
 )
 from tiempo import MADRID, iso_utc
 from resolver import Tramo
+
+
+def filtrar_por_dominio(
+    trayectos: list[Any], cat: Any, t0_utc: datetime
+) -> tuple[list[Any], int]:
+    """Deja solo los trayectos sobre los que el modelo puede predecir sin extrapolar.
+
+    Vive aquí, junto a la construcción de la fila, porque es la otra mitad del mismo
+    problema: `construir_fila` garantiza que las variables SIGNIFIQUEN lo mismo que en
+    entrenamiento, y esto garantiza que el PUNTO del espacio de variables sea uno que el
+    modelo llegó a ver. Las dos son defensas contra el mismo fallo silencioso.
+
+    Lo importan la API y el asistente, que resuelven trayectos por caminos distintos y
+    tienen que descartar exactamente lo mismo: si discreparan, la pantalla y el chat
+    ofrecerían trenes distintos para la misma consulta.
+
+    Devuelve los trayectos admitidos y cuántos se han descartado, para poder avisar.
+    """
+    admitidos, descartados = [], 0
+    for trayecto in trayectos:
+        # Con transbordos, manda el primer tramo: es el que aún no ha arrancado.
+        tramo = trayecto.tramos[0]
+        salida = cat.salida_cabecera_utc(tramo.trip_id, tramo.service_date)
+        if salida is None:
+            # Trip no localizado en el catálogo. No se descarta: no se puede afirmar
+            # que esté fuera de dominio algo que no se ha podido situar en el horario.
+            admitidos.append(trayecto)
+            continue
+        antelacion_s = (salida - t0_utc).total_seconds()
+        if antelacion_s > ANTELACION_MAXIMA_SALIDA_S:
+            descartados += 1
+        else:
+            admitidos.append(trayecto)
+    return admitidos, descartados
 
 
 def construir_fila(

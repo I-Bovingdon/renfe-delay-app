@@ -61,6 +61,7 @@ from modelos import (
 )
 from posiciones import FuentePosiciones
 from predictor import Predictor, PredictorError
+import contrato
 from resolver import resolver_trayecto
 from tiempo import ahora_utc, desde_iso, iso_utc
 
@@ -322,6 +323,23 @@ def consultar(peticion: ConsultaTrayecto):
     request_id = str(uuid.uuid4())
 
     trayectos, aviso = resolver_trayecto(cat, peticion.origen, peticion.destino, t0)
+
+    # Dominio del modelo: se descartan los trenes cuyo trip tardará más de media hora
+    # en arrancar. Fuera de ahí el modelo extrapola y devuelve una cifra que no
+    # describe nada (ver contrato.ANTELACION_MAXIMA_SALIDA_S). Se prefiere no enseñar
+    # un tren antes que enseñarlo con una predicción inventada.
+    if trayectos:
+        trayectos, fuera_de_dominio = features.filtrar_por_dominio(trayectos, cat, t0)
+        if fuera_de_dominio and not aviso:
+            aviso = (
+                "Solo se muestran los trenes que ya circulan o que salen en la próxima "
+                "media hora: son aquellos sobre los que el modelo puede predecir."
+                if trayectos else
+                "No hay trenes que salgan en la próxima media hora para ese trayecto. "
+                "El modelo solo predice sobre trenes que ya circulan o están a punto "
+                "de salir."
+            )
+
     if not trayectos:
         return RespuestaConsulta(
             origen=_a_estacion(origen),
@@ -360,6 +378,20 @@ def consultar(peticion: ConsultaTrayecto):
             pred = predicciones[i_pred]
             i_pred += 1
             retraso_s = float(pred["delay_s_p50"] or 0.0)
+
+            # Líneas fuera del entrenamiento (C9): el modelo predice con la categoría
+            # a nulo, así que el número sale del resto del contexto y no describe esa
+            # línea. Se anula y se avisa. El horario oficial sigue siendo válido y es
+            # lo único que se enseña.
+            if contrato.linea_sin_prediccion(tramo.line_id):
+                retraso_s = 0.0
+                if not aviso:
+                    aviso = (
+                        f"La {tramo.line_id} está excluida del modelo por obras "
+                        f"prolongadas, así que no se predice su retraso. Se muestra "
+                        f"el horario oficial."
+                    )
+
             llegada_estimada = tramo.llegada_teorica_utc.timestamp() + retraso_s
 
             tramos_resp.append(

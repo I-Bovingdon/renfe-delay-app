@@ -95,7 +95,15 @@ class ModeloRetrasos:
         llegada = desde_iso(f["sched_arrival_utc"]).astimezone(MADRID)
         service_date = datetime.fromisoformat(f["service_date"]).date()
 
-        moving = 1 if f["regime"] == "A" else 0
+        # CORRECCIÓN 14/09. `moving` se deriva de la DISPONIBILIDAD del dato, no del
+        # régimen, porque es lo que hace el pipeline de entrenamiento:
+        #   propio["moving"] = np.where(own_train_delay_so_far_s.notna(), 1, 0)
+        # Con la regla anterior (moving = 1 si regime == "A"), un tren en marcha del
+        # que no se tiene estado propio producía la combinación (moving=1, retraso
+        # propio nulo), que NO EXISTE en el entrenamiento. Eran 11 de las 23 filas de
+        # régimen A del experimento del 13/09.
+        propio_disponible = f["regime"] == "A" and f.get("own_delay_s") is not None
+        moving = 1 if propio_disponible else 0
 
         # CORRECCIÓN F7. El pipeline de entrenamiento fuerza a CERO, no a nulo, el
         # retraso propio cuando moving=0 (cercanias_pipeline.py: filas.loc[filas
@@ -103,7 +111,10 @@ class ModeloRetrasos:
         # combinación (moving=0, retraso propio nulo), y el régimen B es la mayoría de
         # las consultas reales: el pasajero pregunta ANTES de que salga el tren.
         # Enviar nulo aquí era train/serve skew silencioso en el caso más frecuente.
-        retraso_propio = f.get("own_delay_s") if moving else 0.0
+        # Con moving=0 el pipeline fuerza CERO, no nulo. Ahora esto cubre también al
+        # tren en marcha sin estado propio, que pasa a tratarse igual que uno que no
+        # ha salido: es la combinación que el modelo sabe interpretar.
+        retraso_propio = f["own_delay_s"] if propio_disponible else 0.0
 
         fila: dict[str, Any] = {
             # --- Correspondencias directas ---
