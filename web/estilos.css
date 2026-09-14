@@ -451,21 +451,6 @@ body {
 .accion:hover { opacity: 0.88; }
 .accion:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* Nota de alcance de la prediccion. Ocupa el sitio del antiguo selector de hora
-   de salida (retirado el 14/09/2026) y declara por que la lista es corta. */
-.alcance {
-  margin: calc(var(--u) * 4) 0 0;
-  padding: calc(var(--u) * 2);
-  border-left: 3px solid var(--linea);
-  border-radius: var(--radio);
-  background: var(--papel);
-  font-size: 0.85rem;
-  line-height: 1.45;
-  color: var(--gris);
-}
-
-.alcance strong { display: block; color: var(--tinta); font-weight: 600; }
-
 .pie-consulta {
   min-height: 1.2rem;
   margin: var(--u) 0 0;
@@ -894,6 +879,55 @@ body {
 
 .pie p { margin: 0 0 4px; }
 .pie__dato { font-family: var(--dato); font-size: 0.72rem; }
+
+/* --- Alcance de la prediccion, tras el boton (i) del pie ------------------
+   Sustituye a la nota que ocupaba el hueco del antiguo selector de hora de
+   salida: la informacion sigue disponible, pero deja de interrumpir el
+   formulario. Se abre por :hover, por :focus-within y por la clase .abierto
+   que pone app.js al pulsar (en movil no hay cursor).                      */
+.pie__info { position: relative; margin-top: calc(var(--u) * 1.5); }
+
+.info {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--niebla);
+  border-radius: 50%;
+  background: var(--carta);
+  color: var(--gris);
+  font-family: var(--texto);
+  font-size: 0.72rem;
+  font-style: italic;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.info:hover,
+.info:focus-visible { border-color: var(--gris); color: var(--tinta); }
+
+.alcance {
+  position: absolute;
+  bottom: calc(100% + var(--u));
+  left: 0;
+  z-index: 20;
+  width: min(22rem, calc(100vw - var(--u) * 4));
+  padding: calc(var(--u) * 1.5);
+  border: 1px solid var(--niebla);
+  border-radius: var(--radio);
+  background: var(--carta);
+  box-shadow: 0 6px 18px rgba(16, 24, 38, 0.12);
+  color: var(--gris);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+}
+
+.pie__info:hover .alcance,
+.pie__info:focus-within .alcance,
+.pie__info.abierto .alcance { opacity: 1; visibility: visible; }
 
 /* --- Enlace al panel de análisis histórico -------------------------------
    WEB-HOLDER: aquí no hay nada que sustituir. La URL va en el href del

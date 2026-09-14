@@ -90,15 +90,8 @@
            que el tren arranque, así que una predicción a una hora vista está fuera de
            dominio. Se consulta siempre "ahora". Ver api/contrato.py.
 
-           En su lugar va una nota que declara el alcance de la prediccion. Ocupa el
-           hueco y, sobre todo, responde en pantalla a la pregunta que la limitacion
-           provoca, en vez de dejar que el usuario la descubra por ausencia. -->
-      <p class="alcance" id="alcance">
-        <strong>Se muestran los trenes que ya circulan o salen en los próximos
-        30&nbsp;minutos.</strong>
-        Es el margen con el que se entrenó el modelo. Más allá, la predicción no sería
-        fiable.
-      </p>
+           El alcance de la prediccion se declara en el pie, tras el boton (i), para
+           no cargar el formulario con una explicacion tecnica. -->
 
       <button class="accion" id="buscar" type="button">Ver trenes</button>
       <p class="pie-consulta" id="pie-consulta"></p>
@@ -298,6 +291,20 @@
   </p>
 
   <p class="pie__dato" id="pie-version"></p>
+
+  <!-- Alcance de la prediccion. Se muestra al pasar el cursor (CSS) y al pulsar
+       (app.js), porque en movil no hay cursor. aria-expanded lo mantiene el
+       manejador para que un lector de pantalla sepa si esta abierto. -->
+  <p class="pie__info">
+    <button class="info" id="info-alcance" type="button"
+            aria-expanded="false" aria-controls="alcance-texto"
+            aria-label="Alcance de la predicción">i</button>
+    <span class="alcance" id="alcance-texto" role="tooltip">
+      Se muestran los trenes que ya circulan o salen en los próximos
+      30&nbsp;minutos. Es el margen con el que se entrenó el modelo. Más allá,
+      la predicción no sería fiable.
+    </span>
+  </p>
 </footer>
 
 <!-- Leaflet va ANTES que app.js: app.js referencia L al construir el mapa. -->

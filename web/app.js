@@ -1239,6 +1239,34 @@ function pararSondeoMapa() {
 montarBuscador("origen", "sugerencias-origen", "origen");
 montarBuscador("destino", "sugerencias-destino", "destino");
 
+// Boton (i) del pie: alcance de la prediccion. El CSS ya lo abre al pasar el
+// cursor; esto cubre el movil, donde no hay cursor, y mantiene aria-expanded al
+// dia para los lectores de pantalla.
+(() => {
+  const boton = $("info-alcance");
+  if (!boton) return;
+  const caja = boton.parentElement;
+
+  const cerrar = () => {
+    caja.classList.remove("abierto");
+    boton.setAttribute("aria-expanded", "false");
+  };
+
+  boton.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    const abierto = caja.classList.toggle("abierto");
+    boton.setAttribute("aria-expanded", abierto ? "true" : "false");
+  });
+
+  // Un toque fuera lo cierra, igual que Escape.
+  document.addEventListener("click", (ev) => {
+    if (!caja.contains(ev.target)) cerrar();
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") cerrar();
+  });
+})();
+
 $("intercambiar").addEventListener("click", () => {
   [estado.origen, estado.destino] = [estado.destino, estado.origen];
   const a = $("origen"), b = $("destino");
