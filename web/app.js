@@ -15,8 +15,6 @@ const API = "";
 const estado = {
   origen: null,        // {stop_id, nombre, lineas}
   destino: null,
-  offsetMin: 0,        // minutos desde ahora, según la ficha elegida
-  horaManual: null,    // "HH:MM" si el usuario fija una hora concreta
   lineasConsulta: [],   // líneas del último resultado, para filtrar alertas
   pantallaActiva: "llegada",
 };
@@ -26,20 +24,6 @@ const $ = (id) => document.getElementById(id);
 // ---------------------------------------------------------------------------
 // Utilidades
 // ---------------------------------------------------------------------------
-
-/** Instante de salida elegido, como Date. */
-function instanteSalida() {
-  if (estado.horaManual) {
-    const [h, m] = estado.horaManual.split(":").map(Number);
-    const cuando = new Date();
-    cuando.setHours(h, m, 0, 0);
-    if (cuando.getTime() < Date.now() - 3 * 3600 * 1000) {
-      cuando.setDate(cuando.getDate() + 1);
-    }
-    return cuando;
-  }
-  return new Date(Date.now() + estado.offsetMin * 60 * 1000);
-}
 
 /** Date -> "07:12" en la hora local del navegador. */
 function comoHora(fecha) {
@@ -275,7 +259,9 @@ async function consultar() {
       body: JSON.stringify({
         origen: estado.origen.stop_id,
         destino: estado.destino.stop_id,
-        salida_desde_utc: instanteSalida().toISOString(),
+        // Sin 'salida_desde_utc': el servidor usa el instante actual. Enviar un
+        // instante futuro producia una fila incoherente, porque el contexto de red,
+        // meteorologia e incidencias que la acompana es siempre el del presente.
       }),
     });
 
@@ -363,9 +349,18 @@ function pintarMargen(tramo) {
 
 function pintarResultado(datos) {
   if (!datos.opciones.length) {
-    avisar("Sin trenes para ese trayecto", datos.aviso || "Prueba con otra hora.");
+    avisar(
+      "Sin trenes para ese trayecto",
+      datos.aviso || "No hay trenes directos disponibles ahora mismo."
+    );
     return;
   }
+
+  // El aviso tambien se muestra CON resultados. Antes solo aparecia cuando la lista
+  // venia vacia, asi que mensajes como el de la C9 excluida del modelo o el del
+  // filtro de dominio se perdian en silencio justo cuando mas falta hacen: al lado
+  // de los numeros que matizan.
+  $("pie-consulta").textContent = datos.aviso || "";
 
   const lineas = new Set(datos.opciones.map((op) => op.tramos[0].line_id));
   aplicarColorDeLinea(lineas.size === 1 ? colorDeLinea([...lineas][0]) : null);
@@ -1243,23 +1238,6 @@ function pararSondeoMapa() {
 // ---------------------------------------------------------------------------
 montarBuscador("origen", "sugerencias-origen", "origen");
 montarBuscador("destino", "sugerencias-destino", "destino");
-
-$("fichas").addEventListener("click", (ev) => {
-  const ficha = ev.target.closest(".ficha");
-  if (!ficha) return;
-  document.querySelectorAll(".ficha").forEach((f) => f.classList.remove("ficha--activa"));
-  ficha.classList.add("ficha--activa");
-  estado.offsetMin = Number(ficha.dataset.min);
-  estado.horaManual = null;
-  $("hora-manual").value = "";
-});
-
-$("hora-manual").addEventListener("change", (ev) => {
-  estado.horaManual = ev.target.value || null;
-  if (estado.horaManual) {
-    document.querySelectorAll(".ficha").forEach((f) => f.classList.remove("ficha--activa"));
-  }
-});
 
 $("intercambiar").addEventListener("click", () => {
   [estado.origen, estado.destino] = [estado.destino, estado.origen];

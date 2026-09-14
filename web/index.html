@@ -81,16 +81,14 @@
         </div>
       </div>
 
-      <fieldset class="salida">
-        <legend class="campo__etiqueta">Salgo</legend>
-        <div class="fichas" id="fichas">
-          <button class="ficha ficha--activa" type="button" data-min="0">Ahora</button>
-          <button class="ficha" type="button" data-min="15">+15 min</button>
-          <button class="ficha" type="button" data-min="30">+30 min</button>
-          <button class="ficha" type="button" data-min="60">+1 h</button>
-        </div>
-        <input class="hora-manual" id="hora-manual" type="time" aria-label="O elige una hora concreta">
-      </fieldset>
+      <!-- El selector de hora de salida (fichas +15/+30/+1h y hora manual) se retiró
+           el 14/09/2026. Enviaba al servidor un instante de consulta futuro, pero el
+           estado de la red, la meteorología y las incidencias que acompañan a esa
+           consulta salen de la caché en vivo y son SIEMPRE las del momento presente:
+           el modelo recibía un t0 futuro con un contexto actual. Además, el
+           entrenamiento solo contiene consultas hechas como mucho 30 minutos antes de
+           que el tren arranque, así que una predicción a una hora vista está fuera de
+           dominio. Se consulta siempre "ahora". Ver api/contrato.py. -->
 
       <button class="accion" id="buscar" type="button">Ver trenes</button>
       <p class="pie-consulta" id="pie-consulta"></p>
