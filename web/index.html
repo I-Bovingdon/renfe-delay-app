@@ -290,21 +290,26 @@
     </a>
   </p>
 
-  <p class="pie__dato" id="pie-version"></p>
+  <!-- El boton (i) va en la MISMA linea que la version, delante de ella. Vive en
+       su propio <span> y no dentro de #pie-version porque app.js reescribe el
+       textContent de ese parrafo al cargar el catalogo, lo que borraria el boton.
 
-  <!-- Alcance de la prediccion. Se muestra al pasar el cursor (CSS) y al pulsar
+       Alcance de la prediccion: se muestra al pasar el cursor (CSS) y al pulsar
        (app.js), porque en movil no hay cursor. aria-expanded lo mantiene el
        manejador para que un lector de pantalla sepa si esta abierto. -->
-  <p class="pie__info">
-    <button class="info" id="info-alcance" type="button"
-            aria-expanded="false" aria-controls="alcance-texto"
-            aria-label="Alcance de la predicción">i</button>
-    <span class="alcance" id="alcance-texto" role="tooltip">
-      Se muestran los trenes que ya circulan o salen en los próximos
-      30&nbsp;minutos. Es el margen con el que se entrenó el modelo. Más allá,
-      la predicción no sería fiable.
+  <div class="pie__version">
+    <span class="pie__info">
+      <button class="info" id="info-alcance" type="button"
+              aria-expanded="false" aria-controls="alcance-texto"
+              aria-label="Alcance de la predicción">i</button>
+      <span class="alcance" id="alcance-texto" role="tooltip">
+        Se muestran los trenes que ya circulan o salen en los próximos
+        30&nbsp;minutos. Es el margen con el que se entrenó el modelo. Más allá,
+        la predicción no sería fiable.
+      </span>
     </span>
-  </p>
+    <p class="pie__dato" id="pie-version"></p>
+  </div>
 </footer>
 
 <!-- Leaflet va ANTES que app.js: app.js referencia L al construir el mapa. -->

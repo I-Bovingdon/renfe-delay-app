@@ -885,25 +885,39 @@ body {
    salida: la informacion sigue disponible, pero deja de interrumpir el
    formulario. Se abre por :hover, por :focus-within y por la clase .abierto
    que pone app.js al pulsar (en movil no hay cursor).                      */
-.pie__info { position: relative; margin-top: calc(var(--u) * 1.5); }
+/* El boton y la version comparten linea; el boton va delante. */
+.pie__version {
+  display: flex;
+  align-items: center;
+  gap: var(--u);
+  margin: 0 0 4px;
+}
+
+.pie__version .pie__dato { margin: 0; }
+
+.pie__info { position: relative; display: inline-flex; }
 
 .info {
-  width: 18px;
-  height: 18px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
   padding: 0;
-  border: 1px solid var(--niebla);
+  border: 0;
   border-radius: 50%;
-  background: var(--carta);
-  color: var(--gris);
-  font-family: var(--texto);
-  font-size: 0.72rem;
+  background: var(--tinta);
+  color: #fff;
+  font-family: var(--display);
+  font-size: 0.85rem;
+  font-weight: 700;
   font-style: italic;
   line-height: 1;
   cursor: pointer;
+  transition: background 0.12s ease, transform 0.12s ease;
 }
 
 .info:hover,
-.info:focus-visible { border-color: var(--gris); color: var(--tinta); }
+.info:focus-visible { background: var(--gris); transform: scale(1.08); }
 
 .alcance {
   position: absolute;
