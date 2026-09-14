@@ -1050,17 +1050,26 @@ function atenuarEstaciones() {
   });
 }
 
-/** Triángulo girado al rumbo, o cuadrado si el tren está detenido.
- *  Un tren parado no se gira: el rumbo de un vehículo que no se mueve sería una
- *  dirección inventada. */
+/** Marcador del tren: cuadrado si esta detenido, circulo si esta en marcha.
+ *
+ *  Ya no se dibuja flecha. El rumbo se derivaba del catalogo y se midio el
+ *  14/09 contra el desplazamiento real del tren entre dos capturas: las dos
+ *  reglas posibles daban desviaciones medianas de 81 y 109 grados, cuando el
+ *  azar da 90. No contenia informacion sobre la direccion.
+ *
+ *  El fallback anterior era peor que no dibujar nada: 'rumbo ?? 0' giraba el
+ *  triangulo al NORTE cuando no habia rumbo, o sea que un dato ausente se
+ *  presentaba como una direccion concreta.
+ *
+ *  La direccion la da el TEXTO del globo ("Direccion X", "en marcha hacia Y"),
+ *  que sale del catalogo y del feed y es exacta. */
 function iconoTren(tren) {
   const color = colorDeLinea(tren.linea);
   const forma = tren.parado
     ? `<rect x="5" y="5" width="12" height="12" rx="2" fill="${color}"
              stroke="#101826" stroke-width="1.5"/>`
-    : `<path d="M11 2 L18 19 L11 15 L4 19 Z" fill="${color}" stroke="#101826"
-             stroke-width="1.5" stroke-linejoin="round"
-             transform="rotate(${tren.rumbo ?? 0} 11 11)"/>`;
+    : `<circle cx="11" cy="11" r="6.5" fill="${color}" stroke="#101826"
+             stroke-width="1.5"/>`;
   return L.divIcon({
     className: "marcador-tren",
     html: `<svg width="22" height="22" viewBox="0 0 22 22">${forma}</svg>`,

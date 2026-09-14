@@ -8,20 +8,27 @@ su línea, su dirección y su rumbo.
 TRES COSAS QUE EL FEED NO DA Y HAY QUE DERIVAR
 
   1. `bearing`, `speed` y `currentStopSequence` vienen 100% nulos, verificado sobre los
-     Parquet reales. La flecha de dirección NO puede leerse del feed: se calcula como
-     rumbo inicial ortodrómico desde la posición actual hasta la próxima parada, cuyas
-     coordenadas están en el catálogo.
+     Parquet reales. El rumbo se intentó DERIVAR del catálogo y se descartó el
+     14/09/2026 tras medirlo. NO se dibuja dirección: `rumbo` es siempre None.
 
-     CORRECCIÓN DEL 14/09. Cuál es "la próxima parada" se decidía por `currentStatus`,
-     redirigiendo al siguiente punto del recorrido solo cuando el tren venía como
-     STOPPED_AT. Medido sobre una captura real: 158 STOPPED_AT, 88 INCOMING_AT y 82
-     IN_TRANSIT_TO. Los 88 de INCOMING_AT están, por definición del feed, a pocos
-     metros de la parada que publican, y quedaban fuera de esa rama: el rumbo se
-     calculaba desde el tren hasta una estación que tenía prácticamente debajo. La
-     mediana de esa distancia es de 34 m, y sobre 34 m el resultado es ruido de GPS,
-     así que la flecha apuntaba hacia atrás aproximadamente la mitad de las veces.
-     Ahora la decisión la toma la DISTANCIA, que es el dato fiable, y por debajo de
-     un mínimo no se dibuja flecha: ninguna flecha es mejor que una flecha mentirosa.
+     Cómo se midió: se emparejaron dos capturas consecutivas por `tripId` (único:
+     317 sobre 317 entidades), se restringió al núcleo de Madrid y se comparó el
+     rumbo que produciría cada regla candidata con el desplazamiento REAL del tren
+     entre ambas capturas. Sobre 17 trenes con movimiento mayor de 150 m:
+
+       · apuntar al `stopId` publicado  -> desviación mediana 81°, 8 invertidos de 17
+       · apuntar a la parada siguiente  -> desviación mediana 109°, 8 invertidos de 17
+
+     El azar da 90°. Ninguna de las dos reglas contiene información sobre la
+     dirección real. Además, 20 de los 37 desplazamientos entre capturas implicaban
+     velocidades imposibles para Cercanías, con `tripId` único y filtro de núcleo
+     aplicado, así que la posición publicada tampoco soporta una derivación por
+     diferencias.
+
+     Lo que sí es fiable y se sigue usando: la posición instantánea (antigüedad
+     mediana de 4 s, máxima de 5 s, medida el 14/09) y la estación de destino del
+     catálogo. El mapa transmite la dirección con TEXTO, que es exacto, y no con
+     una flecha calculada, que sería decorativa y falsa la mitad de las veces.
 
   2. `route_id` viene 100% nulo. La línea exacta (incluida la rama a/b, que el sufijo del
      trip_id no distingue) sale del catálogo cruzando por núcleo del trip_id. Solo si el
@@ -47,7 +54,6 @@ from __future__ import annotations
 import gzip
 import json
 import logging
-import math
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -72,24 +78,8 @@ DIR_VEHICLE_POSITIONS = Path(
 MARGEN_FEED_CADUCO_S = 10 * 60
 
 # Estados que publica el feed. IN_TRANSIT_TO e INCOMING_AT son "en marcha" a efectos
-# de dibujo; solo STOPPED_AT se pinta como detenido. Se sigue usando para el TEXTO
-# ("parado en" frente a "en marcha hacia"), que es información del operador y es
-# correcta. Lo que ya no depende de este campo es la flecha. Ver la cabecera.
+# de dibujo; solo STOPPED_AT se pinta como detenido.
 ESTADO_PARADO = "STOPPED_AT"
-
-# Por debajo de esta distancia se considera que el tren está EN la parada que
-# publica, sea cual sea su currentStatus, y la flecha apunta a la siguiente del
-# recorrido. 150 m cubre el andén más largo de la red con margen y deja fuera al
-# tren que ya circula: medido el 14/09, 78 de 104 trenes casados con su parada
-# estaban por debajo de ese valor y el percentil 90 de la distribución era 1.188 m,
-# así que los dos grupos están bien separados y el umbral no cae en mitad de nada.
-DISTANCIA_EN_PARADA_M = 150.0
-
-# Distancia mínima para que un rumbo signifique algo. El error típico de la
-# posición publicada es de decenas de metros: por debajo de esto, el ángulo lo
-# decide el ruido y no el movimiento del tren, así que se devuelve None y el mapa
-# dibuja el tren sin flecha.
-DISTANCIA_MINIMA_RUMBO_M = 80.0
 
 # Franja en la que se espera que circulen trenes. Es la MISMA que usa el watchdog de
 # contenido del colector, para que colector y mapa consideren anormal lo mismo.
@@ -105,37 +95,12 @@ def en_horario_de_servicio(momento: datetime) -> bool:
     return HORA_INICIO_SERVICIO <= hora < HORA_FIN_SERVICIO
 
 
-def distancia_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Distancia aproximada en metros entre dos puntos cercanos.
-
-    Proyección plana con corrección de coseno en la latitud media. Sobre las
-    decenas de kilómetros del núcleo de Madrid el error frente a la fórmula
-    esférica es muy inferior al del propio GPS, y se calcula para cada tren en
-    cada ciclo de refresco.
-    """
-    dy = (lat2 - lat1) * 111320.0
-    dx = (lon2 - lon1) * 111320.0 * math.cos(math.radians((lat1 + lat2) / 2.0))
-    return math.hypot(dx, dy)
-
-
-def rumbo_grados(
-    lat1: float, lon1: float, lat2: float, lon2: float,
-    minimo_m: float = DISTANCIA_MINIMA_RUMBO_M,
-) -> float | None:
-    """Rumbo inicial ortodrómico de un punto a otro. 0 = norte, 90 = este.
-
-    Devuelve None si los dos puntos están más cerca que `minimo_m`. El guardarraíl
-    anterior comparaba 1e-6 grados, que son unos 11 cm: no filtraba nada, porque el
-    caso problemático real son los 30-50 m que separan a un tren de la estación en
-    la que está entrando. A esa distancia el ángulo lo decide el error de posición.
-    """
-    if distancia_m(lat1, lon1, lat2, lon2) < minimo_m:
-        return None
-    f1, f2 = math.radians(lat1), math.radians(lat2)
-    dl = math.radians(lon2 - lon1)
-    y = math.sin(dl) * math.cos(f2)
-    x = math.cos(f1) * math.sin(f2) - math.sin(f1) * math.cos(f2) * math.cos(dl)
-    return round((math.degrees(math.atan2(y, x)) + 360.0) % 360.0, 1)
+# NOTA. Aquí vivía `rumbo_grados`, que calculaba el rumbo ortodrómico hacia la
+# próxima parada. Se eliminó el 14/09/2026 con la medición descrita en la cabecera.
+# No se deja desactivada ni detrás de un interruptor: código muerto que calcula algo
+# que se ha demostrado falso es una invitación a que alguien vuelva a encenderlo.
+# La medición está en la cabecera para que la decisión se pueda revisar si algún día
+# el feed publica `bearing`.
 
 
 class FuentePosiciones:
@@ -242,36 +207,10 @@ class FuentePosiciones:
                 ultima = self.cat.estacion(paradas[-1])
                 destino = ultima["nombre"] if ultima else None
 
-            # --- Rumbo hacia la próxima parada, decidido por GEOMETRÍA ---
-            # Si el tren está pegado a la parada que publica, esa parada no sirve
-            # como objetivo (el rumbo hacia algo que tienes debajo es ruido) y se
-            # apunta a la siguiente del recorrido. Si está lejos, la parada
-            # publicada ES hacia donde va. Ver la corrección del 14/09 en la
-            # cabecera: decidir esto por currentStatus dejaba fuera los INCOMING_AT.
-            est_publicada = self.cat.estacion(stop_id)
-            d_publicada = (
-                distancia_m(lat, lon, est_publicada["lat"], est_publicada["lon"])
-                if est_publicada else None
-            )
-
-            objetivo: str | None = stop_id
-            if (
-                d_publicada is not None
-                and d_publicada < DISTANCIA_EN_PARADA_M
-                and paradas
-                and stop_id in paradas
-            ):
-                i = paradas.index(stop_id)
-                # Si no hay parada siguiente, el tren está en su cabecera de
-                # llegada: no hay dirección que dibujar y se queda sin flecha.
-                objetivo = paradas[i + 1] if i + 1 < len(paradas) else None
-
-            est_objetivo = self.cat.estacion(objetivo) if objetivo else None
-            rumbo = (
-                rumbo_grados(lat, lon, est_objetivo["lat"], est_objetivo["lon"])
-                if est_objetivo
-                else None
-            )
+            # --- Rumbo: NO se deriva. Ver la cabecera, punto 1. ---
+            # La clave se conserva en el payload para no romper el contrato con la
+            # interfaz, que ya sabe tratar un rumbo ausente.
+            rumbo = None
 
             est_actual = self.cat.estacion(stop_id)
             por_vehiculo[vehiculo_id] = {
