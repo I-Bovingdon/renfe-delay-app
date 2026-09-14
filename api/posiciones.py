@@ -8,27 +8,31 @@ su línea, su dirección y su rumbo.
 TRES COSAS QUE EL FEED NO DA Y HAY QUE DERIVAR
 
   1. `bearing`, `speed` y `currentStopSequence` vienen 100% nulos, verificado sobre los
-     Parquet reales. El rumbo se intentó DERIVAR del catálogo y se descartó el
-     14/09/2026 tras medirlo. NO se dibuja dirección: `rumbo` es siempre None.
+     Parquet reales. La dirección se DERIVA del recorrido del catálogo: es el rumbo
+     del TRAMO de vía que el tren está recorriendo, de estación a estación.
 
-     Cómo se midió: se emparejaron dos capturas consecutivas por `tripId` (único:
-     317 sobre 317 entidades), se restringió al núcleo de Madrid y se comparó el
-     rumbo que produciría cada regla candidata con el desplazamiento REAL del tren
-     entre ambas capturas. Sobre 17 trenes con movimiento mayor de 150 m:
+     CORRECCIÓN DEL 14/09/2026. Antes el rumbo se calculaba desde la posición GPS del
+     tren hasta una parada. Eso hacía depender la flecha del dato menos fiable del
+     feed: emparejando capturas consecutivas por `tripId`, 20 de 37 desplazamientos
+     implicaban velocidades imposibles para Cercanías. Y cuando el tren está entrando
+     en una estación, la separación entre su posición y esa parada es de decenas de
+     metros (mediana de 34 m), así que el ángulo lo decidía el error de posición y la
+     flecha apuntaba hacia atrás con frecuencia.
 
-       · apuntar al `stopId` publicado  -> desviación mediana 81°, 8 invertidos de 17
-       · apuntar a la parada siguiente  -> desviación mediana 109°, 8 invertidos de 17
+     Ahora la posición GPS NO interviene en el rumbo. Se toma el segmento
+     `paradas[i] -> paradas[i+1]` del recorrido, con las coordenadas exactas del
+     catálogo. Dos propiedades lo hacen robusto:
 
-     El azar da 90°. Ninguna de las dos reglas contiene información sobre la
-     dirección real. Además, 20 de los 37 desplazamientos entre capturas implicaban
-     velocidades imposibles para Cercanías, con `tripId` único y filtro de núcleo
-     aplicado, así que la posición publicada tampoco soporta una derivación por
-     diferencias.
+       · El orden de las paradas está verificado: de los 36.548 trips del catálogo,
+         cero tienen llegadas no crecientes, cero paradas repetidas y cero
+         incoherencias entre salida y llegada (medido el 14/09).
+       · Un error de una parada en el índice apenas mueve el resultado, porque dos
+         tramos consecutivos de vía son casi colineales. Así que da igual si el
+         `stopId` del feed es la parada siguiente o la recién dejada: la dirección
+         de avance es la misma.
 
-     Lo que sí es fiable y se sigue usando: la posición instantánea (antigüedad
-     mediana de 4 s, máxima de 5 s, medida el 14/09) y la estación de destino del
-     catálogo. El mapa transmite la dirección con TEXTO, que es exacto, y no con
-     una flecha calculada, que sería decorativa y falsa la mitad de las veces.
+     La posición GPS se sigue usando para SITUAR el tren, que es para lo que sirve y
+     donde es buena: antigüedad mediana de 4 s y máxima de 5 s, medido el 14/09.
 
   2. `route_id` viene 100% nulo. La línea exacta (incluida la rama a/b, que el sufijo del
      trip_id no distingue) sale del catálogo cruzando por núcleo del trip_id. Solo si el
@@ -54,6 +58,7 @@ from __future__ import annotations
 import gzip
 import json
 import logging
+import math
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -95,12 +100,38 @@ def en_horario_de_servicio(momento: datetime) -> bool:
     return HORA_INICIO_SERVICIO <= hora < HORA_FIN_SERVICIO
 
 
-# NOTA. Aquí vivía `rumbo_grados`, que calculaba el rumbo ortodrómico hacia la
-# próxima parada. Se eliminó el 14/09/2026 con la medición descrita en la cabecera.
-# No se deja desactivada ni detrás de un interruptor: código muerto que calcula algo
-# que se ha demostrado falso es una invitación a que alguien vuelva a encenderlo.
-# La medición está en la cabecera para que la decisión se pueda revisar si algún día
-# el feed publica `bearing`.
+# Separación mínima entre los dos extremos del tramo para que su rumbo signifique
+# algo. Las estaciones consecutivas de la red están a cientos de metros o a varios
+# kilómetros, así que este umbral no descarta tramos reales: solo protege del caso
+# degenerado de dos paradas con coordenadas coincidentes en el catálogo.
+DISTANCIA_MINIMA_TRAMO_M = 50.0
+
+
+def distancia_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Distancia aproximada en metros. Proyección plana con corrección de coseno.
+
+    Sobre las decenas de kilómetros del núcleo de Madrid el error frente a la
+    fórmula esférica es muy inferior al de cualquier dato que manejamos.
+    """
+    dy = (lat2 - lat1) * 111320.0
+    dx = (lon2 - lon1) * 111320.0 * math.cos(math.radians((lat1 + lat2) / 2.0))
+    return math.hypot(dx, dy)
+
+
+def rumbo_grados(lat1: float, lon1: float, lat2: float, lon2: float) -> float | None:
+    """Rumbo inicial ortodrómico de un punto a otro. 0 = norte, 90 = este.
+
+    Devuelve None si los dos puntos están más cerca de DISTANCIA_MINIMA_TRAMO_M.
+    El guardarraíl anterior comparaba 1e-6 grados, que son unos 11 cm, y no
+    filtraba nada en la práctica.
+    """
+    if distancia_m(lat1, lon1, lat2, lon2) < DISTANCIA_MINIMA_TRAMO_M:
+        return None
+    f1, f2 = math.radians(lat1), math.radians(lat2)
+    dl = math.radians(lon2 - lon1)
+    y = math.sin(dl) * math.cos(f2)
+    x = math.cos(f1) * math.sin(f2) - math.sin(f1) * math.cos(f2) * math.cos(dl)
+    return round((math.degrees(math.atan2(y, x)) + 360.0) % 360.0, 1)
 
 
 class FuentePosiciones:
@@ -207,10 +238,24 @@ class FuentePosiciones:
                 ultima = self.cat.estacion(paradas[-1])
                 destino = ultima["nombre"] if ultima else None
 
-            # --- Rumbo: NO se deriva. Ver la cabecera, punto 1. ---
-            # La clave se conserva en el payload para no romper el contrato con la
-            # interfaz, que ya sabe tratar un rumbo ausente.
+            # --- Rumbo del TRAMO de recorrido. La posición GPS no interviene ---
+            # Se toma el segmento de vía en el que está el tren, de estación a
+            # estación, y se usa su rumbo. En la última parada del recorrido no hay
+            # tramo siguiente, así que se usa el anterior: el tren llegó por ahí y
+            # ese es su sentido de avance. Ver la corrección del 14/09 en la cabecera.
             rumbo = None
+            if paradas and stop_id in paradas:
+                i = paradas.index(stop_id)
+                if i + 1 < len(paradas):
+                    desde, hasta = paradas[i], paradas[i + 1]
+                elif i > 0:
+                    desde, hasta = paradas[i - 1], paradas[i]
+                else:
+                    desde = hasta = None          # recorrido de una sola parada
+                if desde and hasta:
+                    a, b = self.cat.estacion(desde), self.cat.estacion(hasta)
+                    if a and b:
+                        rumbo = rumbo_grados(a["lat"], a["lon"], b["lat"], b["lon"])
 
             est_actual = self.cat.estacion(stop_id)
             por_vehiculo[vehiculo_id] = {

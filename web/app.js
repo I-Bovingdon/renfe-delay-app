@@ -1050,26 +1050,31 @@ function atenuarEstaciones() {
   });
 }
 
-/** Marcador del tren: cuadrado si esta detenido, circulo si esta en marcha.
+/** Marcador del tren: cuadrado si esta detenido, triangulo girado si esta en
+ *  marcha, circulo si esta en marcha pero no hay rumbo fiable.
  *
- *  Ya no se dibuja flecha. El rumbo se derivaba del catalogo y se midio el
- *  14/09 contra el desplazamiento real del tren entre dos capturas: las dos
- *  reglas posibles daban desviaciones medianas de 81 y 109 grados, cuando el
- *  azar da 90. No contenia informacion sobre la direccion.
+ *  El rumbo es el del TRAMO de via que recorre el tren, calculado de estacion a
+ *  estacion con las coordenadas del catalogo. No depende de la posicion GPS, que
+ *  es el dato que hacia que la flecha apuntase hacia atras cuando el tren estaba
+ *  entrando en una estacion (correccion del 14/09, ver api/posiciones.py).
  *
- *  El fallback anterior era peor que no dibujar nada: 'rumbo ?? 0' giraba el
- *  triangulo al NORTE cuando no habia rumbo, o sea que un dato ausente se
- *  presentaba como una direccion concreta.
- *
- *  La direccion la da el TEXTO del globo ("Direccion X", "en marcha hacia Y"),
- *  que sale del catalogo y del feed y es exacta. */
+ *  Cuando no hay rumbo se dibuja un circulo y NO un triangulo al norte: el
+ *  fallback anterior era 'rotate(rumbo ?? 0)', que presentaba un dato ausente
+ *  como una direccion concreta. */
 function iconoTren(tren) {
   const color = colorDeLinea(tren.linea);
-  const forma = tren.parado
-    ? `<rect x="5" y="5" width="12" height="12" rx="2" fill="${color}"
-             stroke="#101826" stroke-width="1.5"/>`
-    : `<circle cx="11" cy="11" r="6.5" fill="${color}" stroke="#101826"
-             stroke-width="1.5"/>`;
+  let forma;
+  if (tren.parado) {
+    forma = `<rect x="5" y="5" width="12" height="12" rx="2" fill="${color}"
+                   stroke="#101826" stroke-width="1.5"/>`;
+  } else if (tren.rumbo === null || tren.rumbo === undefined) {
+    forma = `<circle cx="11" cy="11" r="6.5" fill="${color}" stroke="#101826"
+                   stroke-width="1.5"/>`;
+  } else {
+    forma = `<path d="M11 2 L18 19 L11 15 L4 19 Z" fill="${color}" stroke="#101826"
+                   stroke-width="1.5" stroke-linejoin="round"
+                   transform="rotate(${tren.rumbo} 11 11)"/>`;
+  }
   return L.divIcon({
     className: "marcador-tren",
     html: `<svg width="22" height="22" viewBox="0 0 22 22">${forma}</svg>`,
