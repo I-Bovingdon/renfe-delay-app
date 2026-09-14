@@ -92,7 +92,40 @@ PETICIONES_MIN = int(os.getenv("CHAT_PETICIONES_MIN", "15"))
 # y línea excluida del entrenamiento por falta de muestra) aparecía como la peor de
 # la red con 43 min de media calculados sobre un puñado de trenes. Un número
 # calculado sobre dos observaciones no es el estado de una línea.
-MIN_TRENES_REPRESENTATIVO = int(os.getenv("CHAT_MIN_TRENES", "3"))
+MIN_TRENES_REPRESENTATIVO = int(os.getenv("CHAT_MIN_TRENES", "5"))
+
+# Líneas con AFECTACIÓN ESTRUCTURAL conocida, excluidas de la comparación de
+# "qué línea va peor ahora mismo".
+#
+# Es un filtro DISTINTO del de MIN_TRENES_REPRESENTATIVO y responde a otra
+# pregunta. Aquel excluye una media calculada sobre una muestra demasiado
+# pequeña; este excluye una media que sí es correcta pero que no describe lo que
+# el usuario está preguntando. La C9 lleva en obras de reforma integral desde
+# marzo de 2026: su retraso es una condición permanente del servicio, no un
+# incidente de hoy, y ponerla siempre en cabeza de un ranking de incidencias
+# del momento oculta la línea que de verdad va mal esta tarde.
+#
+# NO se excluye del histórico de puntualidad (historico.py), donde la C9 sale
+# como la menos puntual con un 38,2%: allí la pregunta es cómo se comportó la
+# línea, y la respuesta correcta es esa. Son dos preguntas distintas.
+#
+# Se declara en la respuesta en lugar de omitirla en silencio: un tribunal que
+# pregunte por la C9 se encuentra con que el producto ya explica el criterio.
+LINEAS_ESTRUCTURALES: frozenset[str] = frozenset(
+    c.strip().upper()
+    for c in os.getenv("CHAT_LINEAS_ESTRUCTURALES", "C9").split(",")
+    if c.strip()
+)
+
+# Motivo mostrado al usuario. Una línea por código; si falta, se da un texto
+# genérico. Vive aquí y no en el .env porque es texto de producto, no config.
+MOTIVO_ESTRUCTURAL: dict[str, str] = {
+    "C9": "está en obras de reforma integral desde marzo",
+}
+
+
+def _motivo_estructural(codigo: str) -> str:
+    return MOTIVO_ESTRUCTURAL.get(codigo.upper(), "tiene una afectación programada")
 
 
 def habilitado() -> bool:
@@ -579,20 +612,41 @@ class AsistenteChat:
         # anécdota. Decirlo es más honesto que dar la cifra pelada.
         cautela = ("" if trenes >= MIN_TRENES_REPRESENTATIVO else
                    " Son pocos trenes, así que la media es poco representativa.")
+        # Si se pregunta DIRECTAMENTE por una línea con afectación estructural, la
+        # cifra se da igual (es real y es lo que se ha preguntado), pero con su
+        # contexto. Aquí no se oculta nada: lo que se evita en el ranking es que
+        # esta línea desplace a la que de verdad va mal hoy.
+        if base in LINEAS_ESTRUCTURALES:
+            cautela += (f" Ten en cuenta que la {base} {_motivo_estructural(base)}, "
+                        f"así que ese retraso es habitual y no responde a una "
+                        f"incidencia puntual.")
         return (f"La {base} acumula un retraso medio de {_minutos(media)} en los "
                 f"últimos 30 minutos, con {trenes} trenes en circulación."
                 f"{cautela}"), None
 
-    def _h_ranking(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
-        """Peor y mejor línea AHORA MISMO.
+    # Cuántas líneas se nombran en el lado "peor" del ranking. Se pasó de una a
+    # tres el 14/09: a la pregunta "¿cuáles son las 3 líneas con mayor retraso?"
+    # la plantilla contestaba con la peor y la mejor, que no es lo que se
+    # preguntaba. Listar siempre las tres peores responde tanto a esa pregunta
+    # como a "¿qué línea va peor?", sin añadir ninguna entidad al esquema de
+    # clasificación y, por tanto, sin tocar lo que hace el modelo de lenguaje.
+    TOPE_RANKING = 3
 
-        Dos criterios que no son cosméticos:
+    def _h_ranking(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
+        """Las peores líneas y la mejor, AHORA MISMO.
+
+        Tres criterios, ninguno cosmético:
 
         1. Se agrega por código base (C4a y C4b cuentan como C4). Al viajero no le
            dice nada la rama, y separarlas partiría la muestra en dos.
         2. Se EXIGE un mínimo de trenes en circulación. Sin ese filtro, una línea
            con servicio suspendido y dos trenes residuales encabeza el ranking con
            una media que no describe nada. Verificado el 13/09 con la C9.
+        3. Se EXCLUYEN las líneas con afectación estructural declarada (ver
+           LINEAS_ESTRUCTURALES). Su media es correcta pero contesta otra
+           pregunta: el usuario quiere saber qué va mal hoy, no qué lleva medio
+           año en obras. Es un filtro por MOTIVO, no por tamaño de muestra, y por
+           eso se aplica y se explica por separado.
 
         El número de trenes viaja en la respuesta: un ranking sin el tamaño de la
         muestra invita justo a la pregunta que no se quiere recibir en la defensa.
@@ -612,32 +666,57 @@ class AsistenteChat:
             acc["n"] += max(trenes, 1)
             acc["trenes"] += trenes
 
+        # Los dos filtros se aplican por separado para poder explicar cada
+        # exclusión por su motivo real. Una línea estructural que además tenga
+        # pocos trenes se declara como estructural, que es la razón de fondo.
+        estructurales = sorted(set(agregado) & LINEAS_ESTRUCTURALES)
+        comparables = {b: a for b, a in agregado.items() if b not in LINEAS_ESTRUCTURALES}
+
         representativas = {
             base: (a["suma"] / a["n"], a["trenes"])
-            for base, a in agregado.items()
+            for base, a in comparables.items()
             if a["trenes"] >= MIN_TRENES_REPRESENTATIVO
         }
-        descartadas = sorted(set(agregado) - set(representativas))
+        escasas = sorted(set(comparables) - set(representativas))
 
         if len(representativas) < 2:
             return ("No tengo suficientes líneas con trenes en circulación para "
                     "compararlas ahora mismo. El mapa muestra el detalle."), None
 
         orden = sorted(representativas.items(), key=lambda kv: kv[1][0], reverse=True)
-        (peor, (d_peor, t_peor)) = orden[0]
+        # Las peores, sin invadir el otro extremo: con pocas líneas comparables,
+        # anunciar "las tres peores" y que una de ellas sea también la mejor
+        # sería contradictorio dentro de la misma frase.
+        n_peores = min(self.TOPE_RANKING, len(orden) - 1)
+        peores = orden[:n_peores]
         (mejor, (d_mejor, t_mejor)) = orden[-1]
 
-        nota = ""
-        if descartadas:
-            verbo = "se ha excluido la" if len(descartadas) == 1 else "se han excluido las"
-            nota = (f" Además, {verbo} {', '.join(descartadas)} por tener menos de "
-                    f"{MIN_TRENES_REPRESENTATIVO} trenes en circulación: con tan "
-                    f"pocos, la media no sería representativa.")
+        detalle = ", ".join(
+            f"la {base} con {_minutos(d)} sobre {t} trenes" for base, (d, t) in peores
+        )
+        encabezado = (
+            f"Ahora mismo la línea con más retraso medio es {detalle}."
+            if n_peores == 1 else
+            f"Ahora mismo las {n_peores} líneas con más retraso medio en los "
+            f"últimos 30 minutos son: {detalle}."
+        )
 
-        return (f"Ahora mismo la línea con más retraso medio es la {peor}, con "
-                f"{_minutos(d_peor)} en los últimos 30 minutos sobre {t_peor} trenes. "
-                f"La que mejor va es la {mejor}, con {_minutos(d_mejor)} sobre "
-                f"{t_mejor} trenes. Comparadas {len(representativas)} líneas.{nota}"), \
+        nota = ""
+        if escasas:
+            verbo = "se ha excluido la" if len(escasas) == 1 else "se han excluido las"
+            nota += (f" Además, {verbo} {', '.join(escasas)} por tener menos de "
+                     f"{MIN_TRENES_REPRESENTATIVO} trenes en circulación: con tan "
+                     f"pocos, la media no sería representativa.")
+        if estructurales:
+            motivos = "; ".join(f"la {c}, que {_motivo_estructural(c)}"
+                                for c in estructurales)
+            fuera = "Queda fuera" if len(estructurales) == 1 else "Quedan fuera"
+            nota += (f" {fuera} de la comparación {motivos}: su retraso es una "
+                     f"condición permanente del servicio, no una incidencia de hoy.")
+
+        return (f"{encabezado} La que mejor va es la {mejor}, con "
+                f"{_minutos(d_mejor)} sobre {t_mejor} trenes. Comparadas "
+                f"{len(representativas)} líneas.{nota}"), \
                {"tipo": "sugerir", "pantalla": "mapa",
                 "etiqueta": "Ver el mapa de la red"}
 

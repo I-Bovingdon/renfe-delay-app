@@ -347,7 +347,13 @@ function pintarResultado(datos) {
       const tramo = op.tramos[0];
       const salida = comoHora(new Date(op.salida_teorica_utc));
       const llegada = comoHora(new Date(op.llegada_estimada_utc));
-      const paradas = tramo.paradas_intermedias;
+      // Paradas que hace el tren hasta el destino, INCLUIDA la de bajada.
+      // Con paradas_intermedias a secas, un trayecto entre dos estaciones
+      // contiguas mostraba "0 paradas", que el viajero lee como "este tren no
+      // para", no como "la siguiente es la tuya". El campo del backend no se
+      // toca: 'paradas_intermedias' sigue significando lo que dice su nombre y
+      // es la magnitud que consume el modelo (features.py: stops_to_dest).
+      const paradas = tramo.paradas_intermedias + 1;
       const r = clasificarRetraso(op.retraso_total_s);
 
       return `
@@ -356,7 +362,7 @@ function pintarResultado(datos) {
           <div class="tren__origen">
             <span class="tren__linea">${tramo.line_id}</span>
             <span>Sale a las <span class="tren__salida">${salida}</span></span>
-            <span>· ${paradas} ${paradas === 1 ? "parada" : "paradas"}</span>
+            <span>· ${paradas} ${paradas === 1 ? "parada" : "paradas"} hasta tu destino</span>
           </div>
 
           <div class="tren__principal">
