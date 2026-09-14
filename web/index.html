@@ -88,7 +88,17 @@
            el modelo recibía un t0 futuro con un contexto actual. Además, el
            entrenamiento solo contiene consultas hechas como mucho 30 minutos antes de
            que el tren arranque, así que una predicción a una hora vista está fuera de
-           dominio. Se consulta siempre "ahora". Ver api/contrato.py. -->
+           dominio. Se consulta siempre "ahora". Ver api/contrato.py.
+
+           En su lugar va una nota que declara el alcance de la prediccion. Ocupa el
+           hueco y, sobre todo, responde en pantalla a la pregunta que la limitacion
+           provoca, en vez de dejar que el usuario la descubra por ausencia. -->
+      <p class="alcance" id="alcance">
+        <strong>Se muestran los trenes que ya circulan o salen en los próximos
+        30&nbsp;minutos.</strong>
+        Es el margen con el que se entrenó el modelo. Más allá, la predicción no sería
+        fiable.
+      </p>
 
       <button class="accion" id="buscar" type="button">Ver trenes</button>
       <p class="pie-consulta" id="pie-consulta"></p>

@@ -451,6 +451,21 @@ body {
 .accion:hover { opacity: 0.88; }
 .accion:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* Nota de alcance de la prediccion. Ocupa el sitio del antiguo selector de hora
+   de salida (retirado el 14/09/2026) y declara por que la lista es corta. */
+.alcance {
+  margin: calc(var(--u) * 4) 0 0;
+  padding: calc(var(--u) * 2);
+  border-left: 3px solid var(--linea);
+  border-radius: var(--radio);
+  background: var(--papel);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--gris);
+}
+
+.alcance strong { display: block; color: var(--tinta); font-weight: 600; }
+
 .pie-consulta {
   min-height: 1.2rem;
   margin: var(--u) 0 0;
