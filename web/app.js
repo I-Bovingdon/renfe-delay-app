@@ -299,8 +299,35 @@ function avisar(titulo, texto) {
   mostrar("panel-aviso", true);
 }
 
+/** Retraso que se MUESTRA al viajero, en segundos.
+ *
+ * El modelo puede devolver valores negativos: predice que el tren llegara antes
+ * de su hora oficial. Medido el 13/09 sobre 548 predicciones, 28 salieron
+ * negativas, con un caso de -30 min detectado el 14/09 en la C8a. Carece de
+ * sentido operativo, porque el horario es un compromiso comercial y los trenes
+ * esperan en las paradas, y destruye la confianza en el sistema entero: una
+ * pantalla que anuncia una llegada media hora antes de hora no se cree nadie.
+ *
+ * El acotado vive AQUI, en la capa de presentacion, y a proposito:
+ *   - La API sigue devolviendo el valor crudo del modelo en 'retraso_s', de modo
+ *     que el registro y cualquier validacion futura siguen midiendo lo que el
+ *     modelo produce de verdad. Corregir el sesgo es tarea del reentrenamiento,
+ *     no de la interfaz.
+ *   - Existe una funcion gemela en api/chat.py (_retraso_mostrado). Las dos
+ *     tienen que aplicar la MISMA regla o el asistente y la pantalla darian
+ *     horas distintas para el mismo tren. Si cambias una, cambia la otra.
+ */
+function retrasoMostrado(segundos) {
+  const s = Number(segundos);
+  return Number.isFinite(s) ? Math.max(0, s) : 0;
+}
+
 function clasificarRetraso(segundos) {
-  const min = Math.round(segundos / 60);
+  // Se acota tambien aqui, y no solo donde se llama, para que ningun camino
+  // futuro pueda volver a pintar "En hora" sobre un retraso negativo: la
+  // condicion de abajo solo comprueba el limite superior, asi que un -30
+  // cumplia 'min <= 2' y se mostraba como puntualidad.
+  const min = Math.round(retrasoMostrado(segundos) / 60);
   if (min <= 2) return { clase: "puntual", icono: "●", texto: "En hora", min };
   if (min <= 10) return { clase: "leve", icono: "▲", texto: `+${min} min`, min };
   return { clase: "alto", icono: "■", texto: `+${min} min`, min };
@@ -309,7 +336,11 @@ function clasificarRetraso(segundos) {
 function pintarMargen(tramo) {
   if (!tramo.retraso_s.con_intervalo) return "";
 
-  const { p10, p50, p90 } = tramo.retraso_s;
+  // Misma regla que en el numero grande: la banda de incertidumbre no puede
+  // empezar antes de la hora oficial.
+  const p10 = retrasoMostrado(tramo.retraso_s.p10);
+  const p50 = retrasoMostrado(tramo.retraso_s.p50);
+  const p90 = retrasoMostrado(tramo.retraso_s.p90);
   const tope = Math.max(p90 * 1.15, 300);
   const pct = (v) => Math.max(0, Math.min(100, (v / tope) * 100));
 
@@ -346,7 +377,13 @@ function pintarResultado(datos) {
     .map((op) => {
       const tramo = op.tramos[0];
       const salida = comoHora(new Date(op.salida_teorica_utc));
-      const llegada = comoHora(new Date(op.llegada_estimada_utc));
+      // La llegada mostrada se recompone sobre el horario oficial con el retraso
+      // ya acotado. No se usa 'llegada_estimada_utc' tal cual porque la calcula
+      // el servidor con el valor crudo y podria quedar por delante de la salida.
+      const llegada = comoHora(
+        new Date(Date.parse(op.llegada_teorica_utc) +
+                 retrasoMostrado(op.retraso_total_s) * 1000)
+      );
       // Paradas que hace el tren hasta el destino, INCLUIDA la de bajada.
       // Con paradas_intermedias a secas, un trayecto entre dos estaciones
       // contiguas mostraba "0 paradas", que el viajero lee como "este tren no

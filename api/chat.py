@@ -349,6 +349,29 @@ def _minutos(segundos: float | None) -> str:
     return f"{m:.0f} min" if m >= 1.5 else "1 min"
 
 
+def _retraso_mostrado(segundos: float | None) -> float:
+    """Retraso que se ENSEÑA al usuario, en segundos. Nunca negativo.
+
+    El modelo puede predecir que un tren llegará antes de su hora oficial: 28 de
+    las 548 predicciones del experimento del 13/09 salieron negativas, y el 14/09
+    apareció un caso de -30 min en la C8a. No tiene sentido operativo, porque el
+    horario es un compromiso comercial y los trenes esperan en las paradas.
+
+    Tiene una función gemela en web/app.js (retrasoMostrado) y las dos aplican la
+    MISMA regla. No es duplicación por descuido: son dos lenguajes distintos y las
+    dos superficies enseñan el mismo dato al mismo usuario. Si el asistente y la
+    pantalla acotaran distinto, darían horas de llegada distintas para el mismo
+    tren, que es justo la contradicción que toda la arquitectura evita al consumir
+    las dos las mismas instancias en memoria. Si cambias una, cambia la otra.
+
+    El acotado NO sube al predictor ni a la respuesta de /api/consulta: el valor
+    crudo del modelo se sigue devolviendo y registrando, para que el sesgo se
+    corrija donde toca, en el reentrenamiento, y para que una validación futura
+    siga midiendo lo que el modelo produce y no lo que la interfaz enseña.
+    """
+    return max(0.0, float(segundos or 0.0))
+
+
 # ==================================================================== asistente ===
 class AsistenteChat:
     """Orquesta clasificación, validación, consulta a la aplicación y plantillas."""
@@ -523,7 +546,7 @@ class AsistenteChat:
 
         lineas_txt = []
         for tramo, fila, pred in zip(tramos, filas, predicciones):
-            retraso = float(pred.get("delay_s_p50") or 0.0)
+            retraso = _retraso_mostrado(pred.get("delay_s_p50"))
             llegada = tramo.llegada_teorica_utc + timedelta(seconds=retraso)
             lineas_txt.append(
                 f"· {tramo.line_id} · sale {formatear_local(tramo.salida_teorica_utc)} "
@@ -761,7 +784,10 @@ class AsistenteChat:
             partes.append(f"{float(f['temp_c']):.0f} °C")
             if (f.get("precip_mm_1h") or 0) > 0:
                 partes.append(f"{float(f['precip_mm_1h']):.1f} mm de lluvia acumulada")
-        retraso = float(pred.get("delay_s_p50") or 0.0)
+        # La misma cifra acotada que se dio al responder el trayecto. Explicar una
+        # estimación distinta de la que se acaba de enseñar sería incoherente
+        # dentro de la propia conversación.
+        retraso = _retraso_mostrado(pred.get("delay_s_p50"))
         return ("La estimación de " + _minutos(retraso) + " sale de un modelo "
                 "entrenado con el histórico de la red. Los valores con los que se "
                 "calculó fueron: " + "; ".join(partes) + ". No es una explicación de "
