@@ -168,9 +168,11 @@ def resolver_trayecto(
     aviso = None
     if not trayectos:
         if hubo_conexiones:
+            # No se sugiere "prueba con otra hora": el selector de hora de salida se
+            # retiró el 14/09/2026 y la consulta es siempre desde el instante actual.
             aviso = (
-                f"No hay trenes directos en los {ventana_min} minutos siguientes a la "
-                f"hora indicada. Prueba con otra hora."
+                f"No hay trenes directos entre estas estaciones en los próximos "
+                f"{ventana_min} minutos."
             )
         else:
             aviso = (
