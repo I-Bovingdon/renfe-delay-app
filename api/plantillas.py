@@ -91,7 +91,7 @@ class RedactorES:
 
     # Motivo de exclusión de las líneas con afectación estructural. Es texto de
     # producto, no configuración: por eso vive aquí y no en el .env.
-    MOTIVO_ESTRUCTURAL = {"C9": "está en obras de reforma integral desde marzo"}
+    MOTIVO_ESTRUCTURAL = {"C9": "tiene el servicio de trenes suspendido por obras de reforma integral desde mayo de 2024"}
     MOTIVO_GENERICO = "tiene una afectación programada"
 
     # Nombres legibles. Antes el asistente enseñaba los códigos internos ("Averia",
@@ -449,7 +449,7 @@ class RedactorEN(RedactorES):
         "Why did you estimate that delay?",
     ]
 
-    MOTIVO_ESTRUCTURAL = {"C9": "has been closed for a full refurbishment since March"}
+    MOTIVO_ESTRUCTURAL = {"C9": "has had its train service suspended for a full refurbishment since May 2024"}
     MOTIVO_GENERICO = "is affected by planned works"
 
     TIPOS = {

@@ -50,7 +50,7 @@ const TEXTOS = {
     "form.misma": "El origen y el destino son la misma estación.",
 
     "res.titulo": "Próximos trenes",
-    "res.leyenda": "La hora grande es la <strong>llegada estimada</strong> a tu destino: horario oficial más el retraso previsto. Debajo, el margen en el que se espera el tren.",
+    "res.leyenda": "La hora grande es la <strong>llegada estimada</strong> a tu destino: horario oficial más el retraso previsto.",
     "res.cargando": "Consultando trenes y calculando retrasos",
     "res.error": "No se ha podido consultar",
     "res.sin_trenes": "Sin trenes para ese trayecto",
@@ -180,7 +180,7 @@ const TEXTOS = {
     "form.misma": "Origin and destination are the same station.",
 
     "res.titulo": "Next trains",
-    "res.leyenda": "The large time is the <strong>estimated arrival</strong> at your destination: official timetable plus predicted delay. Below it, the window in which the train is expected.",
+    "res.leyenda": "The large time is the <strong>estimated arrival</strong> at your destination: official timetable plus predicted delay.",
     "res.cargando": "Looking up trains and calculating delays",
     "res.error": "The query could not be completed",
     "res.sin_trenes": "No trains for this journey",

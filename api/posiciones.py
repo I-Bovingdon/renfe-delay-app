@@ -244,10 +244,12 @@ class FuentePosiciones:
             # tramo siguiente, así que se usa el anterior: el tren llegó por ahí y
             # ese es su sentido de avance. Ver la corrección del 14/09 en la cabecera.
             rumbo = None
+            siguiente = None     # parada hacia la que avanza un tren en marcha
             if paradas and stop_id in paradas:
                 i = paradas.index(stop_id)
                 if i + 1 < len(paradas):
                     desde, hasta = paradas[i], paradas[i + 1]
+                    siguiente = hasta
                 elif i > 0:
                     desde, hasta = paradas[i - 1], paradas[i]
                 else:
@@ -257,7 +259,16 @@ class FuentePosiciones:
                     if a and b:
                         rumbo = rumbo_grados(a["lat"], a["lon"], b["lat"], b["lon"])
 
-            est_actual = self.cat.estacion(stop_id)
+            # Qué parada se nombra en la ficha del mapa. Si el tren está detenido,
+            # el stopId es la estación donde está. Si está en marcha, el stopId es la
+            # parada que ACABA DE DEJAR (174° de desviación mediana, medición del
+            # 14/09), así que se nombra la siguiente del recorrido, que es la misma
+            # que orienta la flecha. Sin recorrido casado no se nombra ninguna y la
+            # interfaz muestra el texto genérico.
+            if estado == ESTADO_PARADO:
+                est_actual = self.cat.estacion(stop_id)
+            else:
+                est_actual = self.cat.estacion(siguiente) if siguiente else None
             por_vehiculo[vehiculo_id] = {
                 "id": vehiculo_id,
                 "trip_id": trip_id,

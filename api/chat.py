@@ -103,8 +103,8 @@ MIN_TRENES_REPRESENTATIVO = int(os.getenv("CHAT_MIN_TRENES", "5"))
 # Es un filtro DISTINTO del de MIN_TRENES_REPRESENTATIVO y responde a otra
 # pregunta. Aquel excluye una media calculada sobre una muestra demasiado
 # pequeña; este excluye una media que sí es correcta pero que no describe lo que
-# el usuario está preguntando. La C9 lleva en obras de reforma integral desde
-# marzo de 2026: su retraso es una condición permanente del servicio, no un
+# el usuario está preguntando. La C9 tiene el servicio suspendido por obras de
+# reforma integral desde mayo de 2024: su retraso es una condición permanente del servicio, no un
 # incidente de hoy, y ponerla siempre en cabeza de un ranking de incidencias
 # del momento oculta la línea que de verdad va mal esta tarde.
 #
