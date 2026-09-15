@@ -50,7 +50,8 @@ def normalizar_idioma(valor: str | None) -> str:
 
 # ============================================================================ ES ===
 class RedactorES:
-    """Textos en español. Idénticos a los anteriores al multiidioma."""
+    """Textos en español. Idénticos a los anteriores al multiidioma salvo las cinco
+    correcciones del commit siguiente, documentadas en la referencia de la prueba."""
 
     idioma = "es"
 
@@ -92,6 +93,31 @@ class RedactorES:
     # producto, no configuración: por eso vive aquí y no en el .env.
     MOTIVO_ESTRUCTURAL = {"C9": "está en obras de reforma integral desde marzo"}
     MOTIVO_GENERICO = "tiene una afectación programada"
+
+    # Nombres legibles. Antes el asistente enseñaba los códigos internos ("Averia",
+    # "sin alertas ni meteo", "Incidencias: CADUCO"); son los mismos nombres que usa
+    # la pantalla (web/i18n.js), para que chat y pantalla digan lo mismo.
+    TIPOS = {
+        "RESOLUCION": "Vuelta a la normalidad",
+        "SUPRESION": "Supresión",
+        "AVERIA": "Avería",
+        "RETRASO": "Retraso",
+        "SERVICIO_BUS": "Servicio alternativo",
+        "OBRAS": "Obras",
+        "OTRO": "Otra incidencia",
+    }
+    BLOQUES = {
+        "meteo": "meteorología",
+        "estado_red": "estado de la red",
+        "alertas": "incidencias",
+        "estado_propio": "posición del tren",
+    }
+    ESTADOS_FEED = {
+        "OK": "al día",
+        "CADUCO": "desactualizadas",
+        "SIN_DATOS": "sin datos",
+        "EMISOR_VACIO": "la fuente responde sin contenido",
+    }
 
     # ------------------------------------------------------------- utilidades ---
     def motivo_estructural(self, codigo: str) -> str:
@@ -156,8 +182,8 @@ class RedactorES:
                 f"(horario {horario}, retraso previsto {self.minutos(retraso_s)})")
 
     def nota_degradados(self, bloques: Iterable[str]) -> str:
-        return ("\nAviso: la predicción se ha hecho sin " +
-                " ni ".join(sorted(bloques)) + ".")
+        nombres = [self.BLOQUES.get(b, b) for b in sorted(bloques)]
+        return "\nAviso: la predicción se ha hecho sin datos de " + " ni ".join(nombres) + "."
 
     def cabecera_trayecto(self, origen: str, destino: str) -> str:
         return f"De {origen} a {destino}:\n"
@@ -171,7 +197,7 @@ class RedactorES:
         return "Ahora mismo no hay incidencias activas en la red."
 
     def tipo_incidencia(self, tipo: str) -> str:
-        return tipo.replace("_", " ").capitalize()
+        return self.TIPOS.get(tipo, tipo.replace("_", " ").capitalize())
 
     def alertas_red(self, filas: list[tuple[str, list[str], str]], total: int) -> str:
         """`filas`: (tipo, líneas, texto ya recortado) de las que se enseñan."""
@@ -291,8 +317,10 @@ class RedactorES:
 
     def explicar(self, retraso_s: float, fila: dict, linea: str,
                  tipos: list[str]) -> str:
+        minutos_h = int((fila.get("horizon_s") or 0) / 60)
         partes = [
-            f"horizonte de {int((fila.get('horizon_s') or 0) / 60)} minutos hasta la llegada",
+            f"horizonte de {minutos_h} {'minuto' if minutos_h == 1 else 'minutos'} "
+            f"hasta la llegada",
             ("el tren ya está en circulación" if fila.get("regime") == "A"
              else "el tren aún no ha salido de cabecera"),
         ]
@@ -302,7 +330,7 @@ class RedactorES:
                           f"últimos 30 minutos")
         if tipos:
             partes.append("incidencias de tipo " +
-                          ", ".join(t.lower().replace("_", " ") for t in tipos))
+                          ", ".join(self.tipo_incidencia(t).lower() for t in tipos))
         else:
             partes.append("sin incidencias publicadas en la línea")
         if fila.get("temp_c") is not None:
@@ -320,8 +348,8 @@ class RedactorES:
         return (f"Estado de las fuentes:\n"
                 f"· Estado de la red: {'al día' if vigente else 'sin dato vigente'}"
                 f" ({trenes} trenes en el feed)\n"
-                f"· Posiciones: {posiciones}\n"
-                f"· Incidencias: {incidencias}\n"
+                f"· Posiciones: {self.ESTADOS_FEED.get(posiciones, posiciones)}\n"
+                f"· Incidencias: {self.ESTADOS_FEED.get(incidencias, incidencias)}\n"
                 f"· Modelo: backend {backend}")
 
     # -------------------------------------------------------------- navegación ---

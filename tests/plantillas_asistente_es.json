@@ -36,7 +36,7 @@
   null
  ],
  "tray_normal_c9": [
-  "De Atocha a Alcalá de Henares:\n· C2 · sale 08:05 y llega a Alcalá de Henares a las 08:45 (horario 08:40, retraso previsto 5 min)\n· C9 · sale 08:20 y llega a Alcalá de Henares a las 09:00 según horario. No predigo el retraso de esta línea: está excluida del modelo por obras prolongadas.\nSolo te doy los trenes que ya circulan o salen en la próxima media hora: son sobre los que puedo predecir.\nAviso: la predicción se ha hecho sin alertas ni meteo.",
+  "De Atocha a Alcalá de Henares:\n· C2 · sale 08:05 y llega a Alcalá de Henares a las 08:45 (horario 08:40, retraso previsto 5 min)\n· C9 · sale 08:20 y llega a Alcalá de Henares a las 09:00 según horario. No predigo el retraso de esta línea: está excluida del modelo por obras prolongadas.\nSolo te doy los trenes que ya circulan o salen en la próxima media hora: son sobre los que puedo predecir.\nAviso: la predicción se ha hecho sin datos de incidencias ni meteorología.",
   null
  ],
  "tray_normal_limpio": [
@@ -48,11 +48,11 @@
   null
  ],
  "explicar": [
-  "La estimación de 5 min sale de un modelo entrenado con el histórico de la red. Los valores con los que se calculó fueron: horizonte de 25 minutos hasta la llegada; el tren ya está en circulación; retraso medio de la C2 de 4 min en los últimos 30 minutos; incidencias de tipo averia, obras; 21 °C; 0.6 mm de lluvia acumulada. No es una explicación de la causa del retraso, sino de los datos de entrada.",
+  "La estimación de 5 min sale de un modelo entrenado con el histórico de la red. Los valores con los que se calculó fueron: horizonte de 25 minutos hasta la llegada; el tren ya está en circulación; retraso medio de la C2 de 4 min en los últimos 30 minutos; incidencias de tipo avería, obras; 21 °C; 0.6 mm de lluvia acumulada. No es una explicación de la causa del retraso, sino de los datos de entrada.",
   null
  ],
  "explicar_minimo": [
-  "La estimación de menos de un minuto sale de un modelo entrenado con el histórico de la red. Los valores con los que se calculó fueron: horizonte de 1 minutos hasta la llegada; el tren aún no ha salido de cabecera; sin incidencias publicadas en la línea. No es una explicación de la causa del retraso, sino de los datos de entrada.",
+  "La estimación de menos de un minuto sale de un modelo entrenado con el histórico de la red. Los valores con los que se calculó fueron: horizonte de 1 minuto hasta la llegada; el tren aún no ha salido de cabecera; sin incidencias publicadas en la línea. No es una explicación de la causa del retraso, sino de los datos de entrada.",
   null
  ],
  "red_caduco": [
@@ -67,7 +67,7 @@
   }
  ],
  "red_una": [
-  "Hay 1 incidencia activa:\n· Supresion en C7: Supresión de trenes.",
+  "Hay 1 incidencia activa:\n· Supresión en C7: Supresión de trenes.",
   {
    "tipo": "sugerir",
    "pantalla": "alertas",
@@ -75,7 +75,7 @@
   }
  ],
  "red_varias": [
-  "Hay 5 incidencias activas:\n· Averia en C3, C4: Por avería en la infraestructura entre Atocha y Villaverde Bajo los trenes pueden sufrir retrasos. Se recomienda consultar los paneles de información de las…\n· Servicio bus en C8: Servicio por carretera entre Cercedilla y Los Cotos.\n· Obras: Obras en la red de ancho ibérico.\nY 2 más.",
+  "Hay 5 incidencias activas:\n· Avería en C3, C4: Por avería en la infraestructura entre Atocha y Villaverde Bajo los trenes pueden sufrir retrasos. Se recomienda consultar los paneles de información de las…\n· Servicio alternativo en C8: Servicio por carretera entre Cercedilla y Los Cotos.\n· Obras: Obras en la red de ancho ibérico.\nY 2 más.",
   {
    "tipo": "sugerir",
    "pantalla": "alertas",
@@ -179,7 +179,7 @@
   null
  ],
  "sistema": [
-  "Estado de las fuentes:\n· Estado de la red: al día (87 trenes en el feed)\n· Posiciones: OK\n· Incidencias: CADUCO\n· Modelo: backend lightgbm",
+  "Estado de las fuentes:\n· Estado de la red: al día (87 trenes en el feed)\n· Posiciones: al día\n· Incidencias: desactualizadas\n· Modelo: backend lightgbm",
   null
  ],
  "navegar_llegada": [
