@@ -1,0 +1,262 @@
+{
+ "tray_falta": [
+  "Dime la estación de origen y la de destino y te doy la hora estimada de llegada.",
+  null
+ ],
+ "tray_inexistente": [
+  "No encuentro ninguna estación de Cercanías de Madrid que se llame «Narnia».",
+  null
+ ],
+ "tray_ambigua": [
+  "«san» puede ser varias estaciones: San Cristóbal, San Fernando, San Yago. ¿Cuál es tu destino?",
+  null
+ ],
+ "tray_sin_aviso": [
+  "No he encontrado trenes para ese trayecto.",
+  null
+ ],
+ "tray_aviso_El origen y el desti": [
+  "El origen y el destino son la misma estación.",
+  null
+ ],
+ "tray_aviso_Alguna de las estaci": [
+  "Alguna de las estaciones no pertenece al núcleo de Madrid.",
+  null
+ ],
+ "tray_aviso_No hay trenes direct": [
+  "No hay trenes directos entre estas estaciones en los próximos 90 minutos.",
+  null
+ ],
+ "tray_aviso_No hay tren directo ": [
+  "No hay tren directo entre estas dos estaciones. Los trayectos con transbordo aún no están disponibles.",
+  null
+ ],
+ "tray_todo_fuera": [
+  "Para ese trayecto no hay ningún tren que ya circule o salga en la próxima media hora, que es hasta donde puedo predecir. Los siguientes salen más tarde.",
+  null
+ ],
+ "tray_normal_c9": [
+  "De Atocha a Alcalá de Henares:\n· C2 · sale 08:05 y llega a Alcalá de Henares a las 08:45 (horario 08:40, retraso previsto 5 min)\n· C9 · sale 08:20 y llega a Alcalá de Henares a las 09:00 según horario. No predigo el retraso de esta línea: está excluida del modelo por obras prolongadas.\nSolo te doy los trenes que ya circulan o salen en la próxima media hora: son sobre los que puedo predecir.\nAviso: la predicción se ha hecho sin alertas ni meteo.",
+  null
+ ],
+ "tray_normal_limpio": [
+  "De Chamartín a Sol:\n· C4a · sale 08:05 y llega a Sol a las 08:40 (horario 08:40, retraso previsto menos de un minuto)\n· C4b · sale 08:20 y llega a Sol a las 09:01 (horario 09:00, retraso previsto 1 min)",
+  null
+ ],
+ "explicar_vacio": [
+  "Pregúntame primero por un trayecto y te explico en qué me baso para esa estimación.",
+  null
+ ],
+ "explicar": [
+  "La estimación de 5 min sale de un modelo entrenado con el histórico de la red. Los valores con los que se calculó fueron: horizonte de 25 minutos hasta la llegada; el tren ya está en circulación; retraso medio de la C2 de 4 min en los últimos 30 minutos; incidencias de tipo averia, obras; 21 °C; 0.6 mm de lluvia acumulada. No es una explicación de la causa del retraso, sino de los datos de entrada.",
+  null
+ ],
+ "explicar_minimo": [
+  "La estimación de menos de un minuto sale de un modelo entrenado con el histórico de la red. Los valores con los que se calculó fueron: horizonte de 1 minutos hasta la llegada; el tren aún no ha salido de cabecera; sin incidencias publicadas en la línea. No es una explicación de la causa del retraso, sino de los datos de entrada.",
+  null
+ ],
+ "red_caduco": [
+  "No tengo datos actualizados de incidencias en este momento. La pantalla de alertas muestra el detalle.",
+  null
+ ],
+ "red_vacia": [
+  "Ahora mismo no hay incidencias activas en la red.",
+  {
+   "tipo": "navegar",
+   "pantalla": "alertas"
+  }
+ ],
+ "red_una": [
+  "Hay 1 incidencia activa:\n· Supresion en C7: Supresión de trenes.",
+  {
+   "tipo": "sugerir",
+   "pantalla": "alertas",
+   "etiqueta": "Ver todas las incidencias"
+  }
+ ],
+ "red_varias": [
+  "Hay 5 incidencias activas:\n· Averia en C3, C4: Por avería en la infraestructura entre Atocha y Villaverde Bajo los trenes pueden sufrir retrasos. Se recomienda consultar los paneles de información de las…\n· Servicio bus en C8: Servicio por carretera entre Cercedilla y Los Cotos.\n· Obras: Obras en la red de ancho ibérico.\nY 2 más.",
+  {
+   "tipo": "sugerir",
+   "pantalla": "alertas",
+   "etiqueta": "Ver todas las incidencias"
+  }
+ ],
+ "linea_sin": [
+  "Dime qué línea te interesa, de la C1 a la C10.",
+  null
+ ],
+ "linea_ninguna": [
+  "No hay incidencias activas publicadas en la C1.",
+  null
+ ],
+ "linea_una": [
+  "En la C7 hay 1 incidencia activa:\n· Supresión de trenes.",
+  {
+   "tipo": "sugerir",
+   "pantalla": "alertas",
+   "etiqueta": "Ver incidencias de la C7"
+  }
+ ],
+ "linea_dos": [
+  "En la C4 hay 2 incidencias activas:\n· Por avería en la infraestructura entre Atocha y Villaverde Bajo los trenes pueden sufrir retrasos. Se recomienda consultar los paneles de información de las estaciones y utilizar…\n· Retrasos en la línea C4.",
+  {
+   "tipo": "sugerir",
+   "pantalla": "alertas",
+   "etiqueta": "Ver incidencias de la C4"
+  }
+ ],
+ "estado_sin": [
+  "Dime qué línea quieres consultar, de la C1 a la C10.",
+  null
+ ],
+ "estado_sin_datos": [
+  "No tengo datos recientes de la C8. Puede que no haya trenes suyos circulando ahora mismo.",
+  null
+ ],
+ "estado_pocos": [
+  "La C7 acumula un retraso medio de 3 min en los últimos 30 minutos, con 2 trenes en circulación. Son pocos trenes, así que la media es poco representativa.",
+  null
+ ],
+ "estado_c9": [
+  "La C9 acumula un retraso medio de 43 min en los últimos 30 minutos, con 2 trenes en circulación. Son pocos trenes, así que la media es poco representativa. Ten en cuenta que la C9 está en obras de reforma integral desde marzo, así que ese retraso es habitual y no responde a una incidencia puntual.",
+  null
+ ],
+ "estado_c4": [
+  "La C4 acumula un retraso medio de 7 min en los últimos 30 minutos, con 10 trenes en circulación.",
+  null
+ ],
+ "estado_c2": [
+  "La C2 acumula un retraso medio de menos de un minuto en los últimos 30 minutos, con 12 trenes en circulación.",
+  null
+ ],
+ "ranking_vacio": [
+  "No tengo suficientes líneas con trenes en circulación para compararlas ahora mismo. El mapa muestra el detalle.",
+  null
+ ],
+ "ranking_dos": [
+  "Ahora mismo la línea con más retraso medio es la C1 con 1 min sobre 8 trenes. La que mejor va es la C2, con menos de un minuto sobre 12 trenes. Comparadas 2 líneas.",
+  {
+   "tipo": "sugerir",
+   "pantalla": "mapa",
+   "etiqueta": "Ver el mapa de la red"
+  }
+ ],
+ "ranking_completo": [
+  "Ahora mismo las 3 líneas con más retraso medio en los últimos 30 minutos son: la C3 con 7 min sobre 10 trenes, la C4 con 6 min sobre 10 trenes, la C1 con 1 min sobre 8 trenes. La que mejor va es la C2, con menos de un minuto sobre 12 trenes. Comparadas 5 líneas. Además, se han excluido las C5, C7 por tener menos de 5 trenes en circulación: con tan pocos, la media no sería representativa. Queda fuera de la comparación la C9, que está en obras de reforma integral desde marzo: su retraso es una condición permanente del servicio, no una incidencia de hoy.",
+  {
+   "tipo": "sugerir",
+   "pantalla": "mapa",
+   "etiqueta": "Ver el mapa de la red"
+  }
+ ],
+ "ranking_una_escasa": [
+  "Ahora mismo las 2 líneas con más retraso medio en los últimos 30 minutos son: la C3 con 7 min sobre 10 trenes, la C1 con 1 min sobre 8 trenes. La que mejor va es la C2, con menos de un minuto sobre 12 trenes. Comparadas 3 líneas. Además, se ha excluido la C7 por tener menos de 5 trenes en circulación: con tan pocos, la media no sería representativa.",
+  {
+   "tipo": "sugerir",
+   "pantalla": "mapa",
+   "etiqueta": "Ver el mapa de la red"
+  }
+ ],
+ "hist_ausente": [
+  "Todavía no puedo responder sobre puntualidad histórica: este servicio solo tiene el estado en tiempo real. Puedo decirte qué línea va peor ahora mismo.",
+  null
+ ],
+ "hist_general": [
+  "La línea más puntual es la C2: llega dentro de 3 minutos en el 93% de las observaciones. La menos puntual es la C9, con un 38%. Comparadas 3 líneas. Son datos de 2026-07-01 a 2026-09-10 (72 días) y miden el retraso que publica Renfe, no la predicción del modelo.",
+  null
+ ],
+ "hist_linea": [
+  "La C4 llega puntual en el 81% de las observaciones, tomando puntual como 3 minutos o menos. Su retraso mediano es de menos de un minuto y el 10% de los trenes acumula más de 7 min. Son datos de 2026-07-01 a 2026-09-10 (72 días) y miden el retraso que publica Renfe, no la predicción del modelo.",
+  null
+ ],
+ "hist_linea_rapida": [
+  "La C2 llega puntual en el 93% de las observaciones, tomando puntual como 3 minutos o menos. Su retraso mediano es de menos de un minuto y el 10% de los trenes acumula más de 2 min. Son datos de 2026-07-01 a 2026-09-10 (72 días) y miden el retraso que publica Renfe, no la predicción del modelo.",
+  null
+ ],
+ "hist_desconocida": [
+  "No tengo histórico de la C77. Tengo datos de: C2, C4, C9.",
+  null
+ ],
+ "sistema": [
+  "Estado de las fuentes:\n· Estado de la red: al día (87 trenes en el feed)\n· Posiciones: OK\n· Incidencias: CADUCO\n· Modelo: backend lightgbm",
+  null
+ ],
+ "navegar_llegada": [
+  "Te llevo a la pantalla de llegada estimada.",
+  {
+   "tipo": "navegar",
+   "pantalla": "llegada"
+  }
+ ],
+ "navegar_alertas": [
+  "Te llevo a las incidencias.",
+  {
+   "tipo": "navegar",
+   "pantalla": "alertas"
+  }
+ ],
+ "navegar_mapa": [
+  "Te llevo al mapa de la red.",
+  {
+   "tipo": "navegar",
+   "pantalla": "mapa"
+  }
+ ],
+ "navegar_cocina": [
+  "Puedo llevarte a llegada, alertas o mapa. ¿Cuál quieres?",
+  null
+ ],
+ "fachada_vacio": {
+  "respuesta": "Puedo ayudarte con los trenes de Cercanías de Madrid:\n· La hora de llegada estimada entre dos estaciones\n· Las incidencias de la red o de una línea\n· El retraso que acumula una línea ahora mismo\n· Qué línea va peor en este momento\n· Por qué he estimado un retraso concreto\n· El estado de las fuentes de datos\nTambién puedo llevarte a las pantallas de llegada, alertas o mapa.",
+  "intencion": "AYUDA",
+  "accion": null,
+  "sugerencias": [
+   "¿A qué hora llego a Alcalá saliendo de Atocha?",
+   "¿Qué incidencias hay ahora en la red?",
+   "¿Qué línea va peor en este momento?",
+   "¿Por qué has estimado ese retraso?"
+  ]
+ },
+ "fachada_ayuda": {
+  "respuesta": "Puedo ayudarte con los trenes de Cercanías de Madrid:\n· La hora de llegada estimada entre dos estaciones\n· Las incidencias de la red o de una línea\n· El retraso que acumula una línea ahora mismo\n· Qué línea va peor en este momento\n· Por qué he estimado un retraso concreto\n· El estado de las fuentes de datos\nTambién puedo llevarte a las pantallas de llegada, alertas o mapa.",
+  "intencion": "AYUDA",
+  "accion": null,
+  "sugerencias": [
+   "¿A qué hora llego a Alcalá saliendo de Atocha?",
+   "¿Qué incidencias hay ahora en la red?",
+   "¿Qué línea va peor en este momento?",
+   "¿Por qué has estimado ese retraso?"
+  ]
+ },
+ "fachada_fuera": {
+  "respuesta": "Solo puedo responder sobre los trenes de Cercanías de Madrid y sobre el uso de esta aplicación. Prueba a preguntarme por un trayecto, por las incidencias de una línea o por el estado de la red.",
+  "intencion": "FUERA_DE_ALCANCE",
+  "accion": null,
+  "sugerencias": []
+ },
+ "fachada_fallo": {
+  "respuesta": "No he podido consultar ese dato ahora mismo. Las pantallas de la aplicación siguen disponibles.",
+  "intencion": "ESTADO_LINEA",
+  "accion": null,
+  "sugerencias": []
+ },
+ "fachada_degradado": {
+  "respuesta": "Ahora mismo no puedo interpretar tu pregunta porque el servicio de lenguaje no responde. Las tres pantallas de la aplicación siguen funcionando con normalidad.",
+  "intencion": "DEGRADADO",
+  "accion": null,
+  "sugerencias": []
+ },
+ "fachada_sin_cuota": {
+  "respuesta": "El asistente ha alcanzado su límite de consultas de hoy. Las pantallas de llegada, alertas y mapa siguen funcionando con normalidad.",
+  "intencion": "SIN_CUOTA",
+  "accion": null,
+  "sugerencias": []
+ },
+ "fachada_rapido": {
+  "respuesta": "Vas muy rápido. Espera unos segundos antes de volver a preguntar.",
+  "intencion": "LIMITADO",
+  "accion": null,
+  "sugerencias": []
+ }
+}

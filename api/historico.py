@@ -38,6 +38,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import plantillas
+
 log = logging.getLogger(__name__)
 
 # La salvedad de ventana, en una frase. Va en TODAS las respuestas históricas, no
@@ -47,15 +49,9 @@ log = logging.getLogger(__name__)
 # histórica sin su ventana es una cifra que se puede citar fuera de contexto. El
 # coste es una frase repetida; el riesgo de omitirla es que alguien se lleve el
 # número suelto.
-SALVEDAD = ("Son datos de {desde} a {hasta} ({dias} días) y miden el retraso que "
-            "publica Renfe, no la predicción del modelo.")
-
-
-def _minutos(segundos: float) -> str:
-    m = segundos / 60.0
-    if abs(m) < 1:
-        return "menos de un minuto"
-    return f"{m:.0f} min"
+#
+# El texto de la salvedad y el resto de frases viven en plantillas.py, en español y
+# en inglés (métodos historico_* de cada redactor).
 
 
 class HistoricoPuntualidad:
@@ -82,9 +78,9 @@ class HistoricoPuntualidad:
         )
 
     # ------------------------------------------------------------------ apoyo ---
-    def _salvedad(self) -> str:
+    def _salvedad(self, r: "plantillas.RedactorES") -> str:
         """Ventana y magnitud, en una frase. Acompaña a toda cifra. Ver la cabecera."""
-        return " " + SALVEDAD.format(**self.ventana)
+        return r.historico_salvedad(**self.ventana)
 
     def _normalizar(self, codigo: str | None) -> str | None:
         """'c4b' -> 'C4'. Devuelve None si la línea no está en el resumen."""
@@ -96,35 +92,34 @@ class HistoricoPuntualidad:
         return c if c in self.lineas else None
 
     # --------------------------------------------------------------- respuesta ---
-    def responder(self, codigo_linea: str | None = None) -> str:
+    def responder(self, codigo_linea: str | None = None, idioma: str = "es") -> str:
         """Texto para la intención PUNTUALIDAD_HISTORICA.
 
         Con línea, da su ficha. Sin línea, da la más y la menos puntual. En ambos
         casos el texto lo compone esta plantilla sobre los números del resumen: el
         modelo de lenguaje no interviene.
         """
+        r = plantillas.redactor(idioma)
         margen = self.umbral_s // 60
 
         linea = self._normalizar(codigo_linea)
         if codigo_linea and linea is None:
             disponibles = ", ".join(sorted(self.lineas))
-            return (f"No tengo histórico de la {str(codigo_linea).upper()}. Tengo "
-                    f"datos de: {disponibles}.")
+            return r.historico_desconocida(str(codigo_linea).upper(), disponibles)
 
         if linea:
             v = self.lineas[linea]
-            return (f"La {linea} llega puntual en el {v['pct_puntual']:.0f}% de las "
-                    f"observaciones, tomando puntual como {margen} minutos o menos. "
-                    f"Su retraso mediano es de {_minutos(v['retraso_mediana_s'])} y "
-                    f"el 10% de los trenes acumula más de "
-                    f"{_minutos(v['retraso_p90_s'])}." + self._salvedad())
+            return r.historico_linea(
+                linea, v["pct_puntual"], margen,
+                v["retraso_mediana_s"], v["retraso_p90_s"],
+            ) + self._salvedad(r)
 
         orden = sorted(self.lineas.items(), key=lambda kv: -kv[1]["pct_puntual"])
         (mejor, vm), (peor, vp) = orden[0], orden[-1]
-        return (f"La línea más puntual es la {mejor}: llega dentro de {margen} "
-                f"minutos en el {vm['pct_puntual']:.0f}% de las observaciones. La "
-                f"menos puntual es la {peor}, con un {vp['pct_puntual']:.0f}%. "
-                f"Comparadas {len(self.lineas)} líneas." + self._salvedad())
+        return r.historico_general(
+            mejor, vm["pct_puntual"], peor, vp["pct_puntual"],
+            margen, len(self.lineas),
+        ) + self._salvedad(r)
 
     def diagnostico(self) -> dict[str, Any]:
         return {"lineas": len(self.lineas), "ventana": self.ventana,

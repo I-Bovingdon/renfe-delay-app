@@ -12,6 +12,9 @@
 // El HTML lo sirve la propia API, así que las rutas son relativas al mismo origen.
 const API = "";
 
+// Textos: todo lo visible pasa por t(), definida en i18n.js junto con IDIOMA y
+// LOCALE. Nombres de estación, códigos de línea y textos de Renfe no se traducen.
+
 const estado = {
   origen: null,        // {stop_id, nombre, lineas}
   destino: null,
@@ -27,7 +30,7 @@ const $ = (id) => document.getElementById(id);
 
 /** Date -> "07:12" en la hora local del navegador. */
 function comoHora(fecha) {
-  return fecha.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  return fecha.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
 }
 
 /** ISO con zona -> "07:12". Sin parsear a Date para evitar problemas de TZ. */
@@ -49,9 +52,9 @@ function mostrar(id, visible) {
 // ---------------------------------------------------------------------------
 
 const TITULOS = {
-  llegada: "Llegada estimada",
-  alertas: "Incidencias",
-  mapa: "Estado de la red",
+  llegada: t("titulo.llegada"),
+  alertas: t("titulo.alertas"),
+  mapa: t("titulo.mapa"),
 };
 
 function irA(pantalla) {
@@ -202,7 +205,7 @@ async function cargarColores() {
       coloresLinea[l.line_id] = l.color;
       trazadosLinea[l.line_id] = l.trazado || [];
     });
-    $("pie-version").textContent = `Horarios GTFS · versión ${datos.gtfs_version}`;
+    $("pie-version").textContent = t("pie.version", { v: datos.gtfs_version });
   } catch {
     $("pie-version").textContent = "";
   }
@@ -238,11 +241,11 @@ function colorDeLinea(lineId) {
 // ---------------------------------------------------------------------------
 async function consultar() {
   if (!estado.origen || !estado.destino) {
-    $("pie-consulta").textContent = "Elige una estación de origen y otra de destino.";
+    $("pie-consulta").textContent = t("form.elige");
     return;
   }
   if (estado.origen.stop_id === estado.destino.stop_id) {
-    $("pie-consulta").textContent = "El origen y el destino son la misma estación.";
+    $("pie-consulta").textContent = t("form.misma");
     return;
   }
 
@@ -259,6 +262,8 @@ async function consultar() {
       body: JSON.stringify({
         origen: estado.origen.stop_id,
         destino: estado.destino.stop_id,
+        // Idioma de los avisos que compone el servidor.
+        idioma: IDIOMA,
         // Sin 'salida_desde_utc': el servidor usa el instante actual. Enviar un
         // instante futuro producia una fila incoherente, porque el contexto de red,
         // meteorologia e incidencias que la acompana es siempre el del presente.
@@ -272,7 +277,7 @@ async function consultar() {
 
     pintarResultado(await resp.json());
   } catch (err) {
-    avisar("No se ha podido consultar", String(err.message || err));
+    avisar(t("res.error"), String(err.message || err));
   } finally {
     mostrar("panel-cargando", false);
     $("buscar").disabled = false;
@@ -314,7 +319,7 @@ function clasificarRetraso(segundos) {
   // condicion de abajo solo comprueba el limite superior, asi que un -30
   // cumplia 'min <= 2' y se mostraba como puntualidad.
   const min = Math.round(retrasoMostrado(segundos) / 60);
-  if (min <= 2) return { clase: "puntual", icono: "●", texto: "En hora", min };
+  if (min <= 2) return { clase: "puntual", icono: "●", texto: t("res.en_hora"), min };
   if (min <= 10) return { clase: "leve", icono: "▲", texto: `+${min} min`, min };
   return { clase: "alto", icono: "■", texto: `+${min} min`, min };
 }
@@ -336,23 +341,20 @@ function pintarMargen(tramo) {
   return `
     <div class="margen">
       <div class="margen__pista" role="img"
-           aria-label="Se espera la llegada entre las ${hora(p10)} y las ${hora(p90)}">
+           aria-label="${t("res.margen_aria", { a: hora(p10), b: hora(p90) })}">
         <span class="margen__banda" style="left:${pct(p10)}%;width:${pct(p90) - pct(p10)}%"></span>
         <span class="margen__mediana" style="left:${pct(p50)}%"></span>
       </div>
       <div class="margen__etiquetas">
-        <span>Se espera entre las ${hora(p10)}</span>
-        <span>y las ${hora(p90)}</span>
+        <span>${t("res.margen_desde", { a: hora(p10) })}</span>
+        <span>${t("res.margen_hasta", { b: hora(p90) })}</span>
       </div>
     </div>`;
 }
 
 function pintarResultado(datos) {
   if (!datos.opciones.length) {
-    avisar(
-      "Sin trenes para ese trayecto",
-      datos.aviso || "No hay trenes directos disponibles ahora mismo."
-    );
+    avisar(t("res.sin_trenes"), datos.aviso || t("res.sin_directos"));
     return;
   }
 
@@ -393,14 +395,14 @@ function pintarResultado(datos) {
                  style="--linea:${colorDeLinea(tramo.line_id)}">
           <div class="tren__origen">
             <span class="tren__linea">${tramo.line_id}</span>
-            <span>Sale a las <span class="tren__salida">${salida}</span></span>
-            <span>· ${paradas} ${paradas === 1 ? "parada" : "paradas"} hasta tu destino</span>
+            <span>${t("res.sale")} <span class="tren__salida">${salida}</span></span>
+            <span>${paradas === 1 ? t("res.paradas_1") : t("res.paradas_n", { n: paradas })}</span>
           </div>
 
           <div class="tren__principal">
             <div>
               <span class="tren__llegada">${llegada}</span>
-              <span class="tren__llegada-etiqueta">Llegada estimada</span>
+              <span class="tren__llegada-etiqueta">${t("res.llegada")}</span>
             </div>
             <span class="retraso retraso--${r.clase}">
               <span class="retraso__icono" aria-hidden="true">${r.icono}</span>${r.texto}
@@ -416,8 +418,7 @@ function pintarResultado(datos) {
   datos.opciones.forEach((op) =>
     op.tramos.forEach((t) => (t.degraded_blocks || []).forEach((b) => bloques.add(b)))
   );
-  const nombres = { meteo: "meteorología", estado_red: "estado de la red",
-                    alertas: "incidencias", estado_propio: "posición del tren" };
+  const nombreBloque = (b) => (TEXTOS.es[`bloque.${b}`] ? t(`bloque.${b}`) : b);
 
   // Dos causas distintas, dos mensajes distintos.
   //
@@ -446,18 +447,12 @@ function pintarResultado(datos) {
 
   const frases = [];
   if (transitorios.length) {
-    frases.push(
-      "No se ha podido usar " +
-      transitorios.map((b) => nombres[b] || b).join(", ") +
-      ": esa fuente no respondía al calcular la predicción."
-    );
+    frases.push(t("res.degradado_transitorio",
+                  { x: transitorios.map(nombreBloque).join(", ") }));
   }
   if (estructurales.length) {
-    frases.push(
-      "La predicción no incorpora " +
-      estructurales.map((b) => nombres[b] || b).join(" ni ") +
-      ": son fuentes que todavía no alimentan al modelo."
-    );
+    frases.push(t("res.degradado_estructural",
+                  { x: estructurales.map(nombreBloque).join(t("res.conjuncion_ni")) }));
   }
 
   const nota = $("nota-degradada");
@@ -482,19 +477,12 @@ let filtroLineaActual = "";   // "" = todas
 let timerSondeo = null;
 const PERIODO_SONDEO_MS = 60 * 1000;
 
-const TIPO_LEGIBLE = {
-  // "Vuelta a la normalidad" y no "Incidencia resuelta": el tipo describe lo
-  // que dice el TEXTO del aviso, y el estado ACTIVA/RESUELTA describe si RENFE
-  // lo sigue publicando. Son ejes ortogonales y compartir la palabra "resuelta"
-  // hacía que una alerta activa de tipo RESOLUCION pareciese mal colocada.
-  RESOLUCION: "Vuelta a la normalidad",
-  SUPRESION: "Supresión",
-  AVERIA: "Avería",
-  RETRASO: "Retraso",
-  SERVICIO_BUS: "Servicio alternativo",
-  OBRAS: "Obras",
-  OTRO: "Otra incidencia",
-};
+// Nombre legible de cada tipo de incidencia (claves tipo.* de i18n.js).
+// "Vuelta a la normalidad" y no "Incidencia resuelta": el tipo describe lo que
+// dice el TEXTO del aviso, y el estado ACTIVA/RESUELTA describe si RENFE lo sigue
+// publicando. Son ejes ortogonales y compartir la palabra "resuelta" hacía que una
+// alerta activa de tipo RESOLUCION pareciese mal colocada.
+const tipoLegible = (tipo) => (TEXTOS.es[`tipo.${tipo}`] ? t(`tipo.${tipo}`) : tipo);
 
 const IMPACTO_CLASE = {
   ALTO: "alto",
@@ -553,8 +541,8 @@ function aplicarAvisosInterrupcion() {
     // ESTE tren concreto está suprimido sería ir más allá de lo que dice el dato.
     const cabeza =
       incidencia.tipo === "SERVICIO_BUS"
-        ? `Servicio suspendido en parte de la ${linea}. RENFE ha establecido autobuses.`
-        : `Hay supresiones de trenes en la ${linea}.`;
+        ? t("res.corte_bus", { l: linea })
+        : t("res.corte_supresion", { l: linea });
 
     const aviso = document.createElement("p");
     aviso.className = "interrupcion";
@@ -562,8 +550,7 @@ function aplicarAvisosInterrupcion() {
     // tipo y del identificador de línea del catálogo, que son datos propios.
     aviso.innerHTML =
       `<span class="interrupcion__icono" aria-hidden="true">■</span>` +
-      `<span>${cabeza} Este tren puede no circular; la predicción no tiene en ` +
-      `cuenta la incidencia.</span>`;
+      `<span>${cabeza} ${t("res.corte_cola")}</span>`;
 
     ficha.classList.add("tren--interrumpido");
     ficha.prepend(aviso);
@@ -608,13 +595,10 @@ function pintarPantallaAlertas() {
   // más importante de la pantalla.
   if (datos.feed.estado === "CADUCO" || datos.feed.estado === "SIN_DATOS") {
     $("aviso-feed-texto").textContent =
-      "Los datos de incidencias no están disponibles en este momento. " +
-      "La última actualización fue a las " + horaDeISO(datos.feed.ultima_captura || "") + ".";
+      t("al.caduco", { h: horaDeISO(datos.feed.ultima_captura || "") });
     mostrar("aviso-feed", true);
   } else if (datos.feed.estado === "EMISOR_VACIO") {
-    $("aviso-feed-texto").textContent =
-      "El feed de incidencias de RENFE responde pero sin contenido. " +
-      "Es posible que haya un problema en la fuente.";
+    $("aviso-feed-texto").textContent = t("al.vacio");
     mostrar("aviso-feed", true);
   }
 
@@ -635,9 +619,9 @@ function pintarPantallaAlertas() {
   if (!activas.length && !resueltas.length && !datos.accesibilidad.length) {
     if (filtroLineaActual) {
       $("sin-alertas-texto").textContent =
-        `Sin incidencias hoy en la línea ${filtroLineaActual.toUpperCase()}.`;
+        t("al.sin_linea", { l: filtroLineaActual.toUpperCase() });
     } else {
-      $("sin-alertas-texto").textContent = "No se han registrado incidencias hoy en la red.";
+      $("sin-alertas-texto").textContent = t("al.sin_red");
     }
     mostrar("panel-sin-alertas", true);
     return;
@@ -680,17 +664,17 @@ function pintarAlerta(item, resuelta = false) {
     .map((l) => `<span class="insignia" style="background:${colorDeLinea(l)};color:#fff">${l}</span>`)
     .join("");
   const sinLinea = item.lineas.length === 0
-    ? `<span class="insignia">Red</span>` : "";
+    ? `<span class="insignia">${t("al.red")}</span>` : "";
 
-  const tipo = TIPO_LEGIBLE[item.tipo] || item.tipo;
+  const tipo = tipoLegible(item.tipo);
   const planificada = item.planificada
-    ? `<span class="alerta__etiqueta alerta__etiqueta--planificada">Planificada</span>` : "";
+    ? `<span class="alerta__etiqueta alerta__etiqueta--planificada">${t("al.planificada")}</span>` : "";
 
   const impClase = IMPACTO_CLASE[item.impacto] || "puntual";
   const impIcono = IMPACTO_ICONO[item.impacto] || "●";
 
-  let tiempo = `Desde las ${horaDeISO(item.desde)}`;
-  if (item.hasta) tiempo += ` — resuelta a las ${horaDeISO(item.hasta)}`;
+  let tiempo = t("al.desde", { h: horaDeISO(item.desde) });
+  if (item.hasta) tiempo += t("al.resuelta", { h: horaDeISO(item.hasta) });
 
   return `
     <article class="${cls}">
@@ -700,11 +684,11 @@ function pintarAlerta(item, resuelta = false) {
         ${planificada}
       </div>
       <p class="alerta__texto">${item.texto}</p>
-      <button class="alerta__leer-mas" type="button">leer más</button>
+      <button class="alerta__leer-mas" type="button">${t("al.leer_mas")}</button>
       <div class="alerta__meta">
         <span class="alerta__hora">${tiempo}</span>
         <span class="retraso retraso--${impClase}">
-          <span class="retraso__icono" aria-hidden="true">${impIcono}</span>${item.impacto.toLowerCase()}
+          <span class="retraso__icono" aria-hidden="true">${impIcono}</span>${t(`impacto.${item.impacto}`)}
         </span>
       </div>
     </article>`;
@@ -715,13 +699,13 @@ function pintarAlertaAccesibilidad(item) {
   const cls = resuelta ? "alerta alerta--resuelta" : "alerta";
   const estaciones = (item.estaciones || []).join(", ");
 
-  let tiempo = `Desde las ${horaDeISO(item.desde)}`;
-  if (item.hasta) tiempo += ` — resuelta a las ${horaDeISO(item.hasta)}`;
+  let tiempo = t("al.desde", { h: horaDeISO(item.desde) });
+  if (item.hasta) tiempo += t("al.resuelta", { h: horaDeISO(item.hasta) });
 
   return `
     <article class="${cls}">
       <p class="alerta__texto">${item.texto}</p>
-      <button class="alerta__leer-mas" type="button">leer más</button>
+      <button class="alerta__leer-mas" type="button">${t("al.leer_mas")}</button>
       ${estaciones ? `<p class="alerta__estaciones">${estaciones}</p>` : ""}
       <div class="alerta__meta">
         <span class="alerta__hora">${tiempo}</span>
@@ -779,7 +763,7 @@ function conectarExpandibles(contenedor) {
 
     boton.addEventListener("click", () => {
       const expandido = texto.classList.toggle("alerta__texto--expandido");
-      boton.textContent = expandido ? "leer menos" : "leer más";
+      boton.textContent = expandido ? t("al.leer_menos") : t("al.leer_mas");
     });
   });
 }
@@ -799,11 +783,11 @@ function pintarFiltros(lineas) {
   // Botón "Todas" + botón "Tu trayecto" si hay líneas de consulta + líneas individuales
   let prefijos = "";
   const todasActivo = !filtroLineaActual ? " filtro--activo" : "";
-  prefijos += `<button class="filtro${todasActivo}" data-linea="" type="button">Todas</button>`;
+  prefijos += `<button class="filtro${todasActivo}" data-linea="" type="button">${t("al.todas")}</button>`;
 
   if (estado.lineasConsulta.length > 0) {
     const trayectoActivo = filtroLineaActual === "__trayecto__" ? " filtro--activo" : "";
-    prefijos += `<button class="filtro${trayectoActivo}" data-linea="__trayecto__" type="button">Tu trayecto</button>`;
+    prefijos += `<button class="filtro${trayectoActivo}" data-linea="__trayecto__" type="button">${t("al.tu_trayecto")}</button>`;
   }
 
   cont.innerHTML = prefijos + html;
@@ -872,7 +856,6 @@ function actualizarEnlaceAlertas() {
     return;
   }
 
-  const plural = relevantes.length === 1 ? "incidencia activa" : "incidencias activas";
 
   // Las líneas que se nombran son las AFECTADAS por esas incidencias, no las
   // del trayecto. Antes se listaban las del trayecto entero, así que una
@@ -881,8 +864,9 @@ function actualizarEnlaceAlertas() {
     relevantes.flatMap((i) => i.lineas).filter((l) => set.has(l.toLowerCase()))
   )].sort();
 
+  const clave = relevantes.length === 1 ? "res.enlace_alertas_1" : "res.enlace_alertas_n";
   $("enlace-alertas-texto").textContent =
-    `${relevantes.length} ${plural} en ${afectadas.join(", ")}`;
+    t(clave, { n: relevantes.length, l: afectadas.join(", ") });
   btn.hidden = false;
 }
 
@@ -951,8 +935,7 @@ function iniciarMapa() {
     return;
   }
   if (typeof L === "undefined") {
-    $("aviso-mapa-texto").textContent =
-      "No se ha podido cargar la librería del mapa. Recarga la página.";
+    $("aviso-mapa-texto").textContent = t("mapa.sin_libreria");
     mostrar("aviso-mapa", true);
     return;
   }
@@ -967,7 +950,7 @@ function iniciarMapa() {
     referrerPolicy: "strict-origin-when-cross-origin",
     attribution:
       '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · ' +
-      "Datos de RENFE (CC BY 4.0)",
+      t("mapa.atribucion"),
   }).addTo(mapa);
 
   // El orden de creación es el orden de apilado: trazado abajo, estaciones en
@@ -1080,23 +1063,23 @@ function iconoTren(tren) {
 
 function textoRetraso(tren) {
   if (tren.retraso_s === null || tren.retraso_s === undefined) {
-    return "Sin estimación de retraso";
+    return t("tren.sin_estimacion");
   }
   const min = Math.round(tren.retraso_s / 60);
-  if (min <= 0) return "En hora, según RENFE";
-  return `${min} min de retraso, según RENFE`;
+  if (min <= 0) return t("tren.en_hora");
+  return t("tren.retraso", { m: min });
 }
 
 function fichaTren(tren) {
   const situacion = tren.parado
-    ? `Parado en ${tren.parada ?? "una estación"}`
-    : `En marcha hacia ${tren.parada ?? "la siguiente parada"}`;
+    ? t("tren.parado", { p: tren.parada ?? t("tren.una_estacion") })
+    : t("tren.en_marcha", { p: tren.parada ?? t("tren.siguiente") });
   return `
     <div class="tren-popup">
       <p class="tren-popup__linea" style="--linea:${colorDeLinea(tren.linea)}">
-        ${tren.linea ?? "Línea sin identificar"}
+        ${tren.linea ?? t("tren.sin_linea")}
       </p>
-      <p class="tren-popup__destino">Dirección ${tren.destino ?? "desconocida"}</p>
+      <p class="tren-popup__destino">${t("tren.direccion", { d: tren.destino ?? t("tren.desconocida") })}</p>
       <p class="tren-popup__dato">${situacion}</p>
       <p class="tren-popup__dato">${textoRetraso(tren)}</p>
     </div>`;
@@ -1120,7 +1103,7 @@ function pintarMapa() {
 
   if (!datos) {
     $("aviso-mapa-texto").textContent =
-      "No se han podido cargar las posiciones. Se reintenta en unos segundos.";
+      t("mapa.error");
     mostrar("aviso-mapa", true);
     $("mapa-pie").textContent = "";
     return;
@@ -1130,13 +1113,10 @@ function pintarMapa() {
   // mapa tiene que decir cuál de las dos: si no, un fallo del emisor parecerá nuestro.
   if (datos.feed.estado === "CADUCO" || datos.feed.estado === "SIN_DATOS") {
     $("aviso-mapa-texto").textContent =
-      "Las posiciones no están disponibles en este momento. Última actualización a las " +
-      horaDeISO(datos.feed.ultima_captura || "") + ".";
+      t("mapa.caduco", { h: horaDeISO(datos.feed.ultima_captura || "") });
     mostrar("aviso-mapa", true);
   } else if (datos.feed.estado === "EMISOR_VACIO") {
-    $("aviso-mapa-texto").textContent =
-      "El feed de posiciones de RENFE responde pero sin contenido. " +
-      "Es posible que haya un problema en la fuente.";
+    $("aviso-mapa-texto").textContent = t("mapa.vacio");
     mostrar("aviso-mapa", true);
   }
 
@@ -1156,7 +1136,7 @@ function pintarMapa() {
       const m = L.marker([tren.lat, tren.lon], {
         icon: iconoTren(tren),
         keyboard: true,
-        title: `${tren.linea ?? ""} dirección ${tren.destino ?? ""}`,
+        title: t("tren.titulo", { l: tren.linea ?? "", d: tren.destino ?? "" }),
       })
         .bindPopup(fichaTren(tren))
         .addTo(mapaEstado.capaTrenes);
@@ -1182,15 +1162,16 @@ function pintarMapa() {
   pintarFiltrosMapa();
 
   const edad = datos.feed.antiguedad_s;
-  const cuando = edad === null || edad === undefined ? "" : ` · actualizado hace ${edad} s`;
+  const cuando = edad === null || edad === undefined ? "" : t("mapa.edad", { s: edad });
   if (visibles.length) {
-    $("mapa-pie").textContent =
-      `${visibles.length} ${visibles.length === 1 ? "tren" : "trenes"} en circulación${cuando}`;
+    $("mapa-pie").textContent = visibles.length === 1
+      ? t("mapa.trenes_1", { c: cuando })
+      : t("mapa.trenes_n", { n: visibles.length, c: cuando });
   } else if (datos.n_trenes === 0) {
-    $("mapa-pie").textContent = `No hay trenes de Cercanías Madrid en circulación${cuando}`;
+    $("mapa-pie").textContent = t("mapa.ninguno", { c: cuando });
   } else {
     $("mapa-pie").textContent =
-      `Ningún tren de la línea ${mapaEstado.filtro} ahora mismo${cuando}`;
+      t("mapa.ninguno_linea", { l: mapaEstado.filtro, c: cuando });
   }
 }
 
@@ -1210,7 +1191,7 @@ function pintarFiltrosMapa() {
     .join("");
 
   $("filtros-mapa").innerHTML =
-    `<button class="filtro${todas}" data-linea="" type="button">Todas</button>` + botones;
+    `<button class="filtro${todas}" data-linea="" type="button">${t("al.todas")}</button>` + botones;
   mostrar("filtros-mapa", true);
 }
 
@@ -1320,12 +1301,8 @@ const chatEstado = {
   historial: [],   // [{rol, texto}], recortado a los 4 últimos turnos
 };
 
-const SUGERENCIAS_INICIO = [
-  "¿A qué hora llego a Alcalá saliendo de Atocha?",
-  "¿Qué incidencias hay ahora?",
-  "¿Qué línea va peor en este momento?",
-  "¿Qué puedes hacer?",
-];
+const SUGERENCIAS_INICIO = ["chat.sug_1", "chat.sug_2", "chat.sug_3", "chat.sug_4"]
+  .map((clave) => t(clave));
 
 /** Añade una burbuja al hilo y devuelve el elemento, para poder sustituirlo. */
 function chatBurbuja(texto, clase) {
@@ -1355,7 +1332,7 @@ function chatAccion(accion) {
   const boton = document.createElement("button");
   boton.type = "button";
   boton.className = "chat__accion";
-  boton.textContent = accion.etiqueta || "Ver más";
+  boton.textContent = accion.etiqueta || t("chat.ver_mas");
   boton.addEventListener("click", () => {
     irA(accion.pantalla);
     boton.disabled = true;
@@ -1396,6 +1373,9 @@ async function chatEnviar(texto) {
         texto,
         sesion: chatEstado.sesion,
         historial: chatEstado.historial.slice(-4),
+        // La respuesta se redacta en el idioma de la interfaz, no en el de la
+        // pregunta: el texto del usuario nunca decide cómo se comporta el servidor.
+        idioma: IDIOMA,
       }),
     });
 
@@ -1403,8 +1383,7 @@ async function chatEnviar(texto) {
 
     if (resp.status === 503) {
       // El asistente se ha apagado mientras la página estaba abierta.
-      chatBurbuja("El asistente no está disponible ahora mismo. Las pantallas " +
-                  "de llegada, alertas y mapa siguen funcionando.", "aviso");
+      chatBurbuja(t("chat.no_disponible"), "aviso");
       $("asistente").hidden = true;
       return;
     }
@@ -1441,8 +1420,7 @@ async function chatEnviar(texto) {
     espera.remove();
     // Degradar explícito, nunca inventar: el mismo criterio que el resto del
     // sistema. Y se dice qué SÍ funciona, que es lo útil para quien lo lee.
-    chatBurbuja("No he podido responder ahora mismo. Las pantallas de llegada, " +
-                "alertas y mapa siguen funcionando con normalidad.", "aviso");
+    chatBurbuja(t("chat.error"), "aviso");
   } finally {
     chatEstado.enviando = false;
     $("chat-enviar").disabled = false;
@@ -1456,8 +1434,7 @@ function chatAbrir() {
   $("chat-panel").hidden = false;
   $("chat-lanzador").setAttribute("aria-expanded", "true");
   if (!$("chat-hilo").childElementCount) {
-    chatBurbuja("Puedo consultar tu trayecto, las incidencias de la red y el " +
-                "estado de cada línea. Pregúntame.", "asistente");
+    chatBurbuja(t("chat.bienvenida"), "asistente");
     chatPintarSugerencias(SUGERENCIAS_INICIO);
   }
   $("chat-entrada").focus();

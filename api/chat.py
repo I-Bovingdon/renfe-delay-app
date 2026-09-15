@@ -8,6 +8,7 @@ el módulo y la que hay que poder defender:
                       -> validación contra el enum de intenciones y el catálogo real
                       -> llamada a la lógica que YA EXISTE en la aplicación
                       -> respuesta compuesta por PLANTILLA sobre los datos devueltos
+                         (plantillas.py, un redactor por idioma)
 
 Consecuencia: es estructuralmente imposible que el asistente invente una hora de
 llegada, un retraso o una incidencia, porque el texto final no lo escribe el modelo.
@@ -57,6 +58,7 @@ import requests
 import alertas as alertas_mod
 import contrato
 import features
+import plantillas
 from resolver import resolver_trayecto
 from tiempo import MADRID, ahora_utc, formatear_local
 
@@ -118,15 +120,8 @@ LINEAS_ESTRUCTURALES: frozenset[str] = frozenset(
     if c.strip()
 )
 
-# Motivo mostrado al usuario. Una línea por código; si falta, se da un texto
-# genérico. Vive aquí y no en el .env porque es texto de producto, no config.
-MOTIVO_ESTRUCTURAL: dict[str, str] = {
-    "C9": "está en obras de reforma integral desde marzo",
-}
-
-
-def _motivo_estructural(codigo: str) -> str:
-    return MOTIVO_ESTRUCTURAL.get(codigo.upper(), "tiene una afectación programada")
+# El motivo que se enseña al usuario vive en plantillas.py (MOTIVO_ESTRUCTURAL de
+# cada redactor): es texto de producto y depende del idioma.
 
 
 def habilitado() -> bool:
@@ -209,44 +204,9 @@ SISTEMA = (
 )
 
 # --------------------------------------------------------------- textos fijos ---
-# Respuestas SIN generación: son literales del código, no salidas del modelo.
-TEXTO_AYUDA = (
-    "Puedo ayudarte con los trenes de Cercanías de Madrid:\n"
-    "· La hora de llegada estimada entre dos estaciones\n"
-    "· Las incidencias de la red o de una línea\n"
-    "· El retraso que acumula una línea ahora mismo\n"
-    "· Qué línea va peor en este momento\n"
-    "· Por qué he estimado un retraso concreto\n"
-    "· El estado de las fuentes de datos\n"
-    "También puedo llevarte a las pantallas de llegada, alertas o mapa."
-)
-
-TEXTO_FUERA = (
-    "Solo puedo responder sobre los trenes de Cercanías de Madrid y sobre el uso "
-    "de esta aplicación. Prueba a preguntarme por un trayecto, por las incidencias "
-    "de una línea o por el estado de la red."
-)
-
-TEXTO_DEGRADADO = (
-    "Ahora mismo no puedo interpretar tu pregunta porque el servicio de lenguaje no "
-    "responde. Las tres pantallas de la aplicación siguen funcionando con normalidad."
-)
-
-TEXTO_SIN_CUOTA = (
-    "El asistente ha alcanzado su límite de consultas de hoy. Las pantallas de "
-    "llegada, alertas y mapa siguen funcionando con normalidad."
-)
-
-TEXTO_DEMASIADO_RAPIDO = (
-    "Vas muy rápido. Espera unos segundos antes de volver a preguntar."
-)
-
-SUGERENCIAS = [
-    "¿A qué hora llego a Alcalá saliendo de Atocha?",
-    "¿Qué incidencias hay ahora en la red?",
-    "¿Qué línea va peor en este momento?",
-    "¿Por qué has estimado ese retraso?",
-]
+# Las respuestas SIN generación (ayuda, fuera de alcance, degradaciones) están en
+# plantillas.py, en español y en inglés. Siguen siendo literales del código, no
+# salidas del modelo.
 
 
 # ======================================================================= límites ===
@@ -338,16 +298,6 @@ def _recortar(texto: str, maximo: int) -> str:
         return texto
     corte = texto[:maximo].rsplit(" ", 1)[0]
     return (corte or texto[:maximo]).rstrip(" ,.;") + "…"
-
-
-def _minutos(segundos: float | None) -> str:
-    """Segundos a un texto en minutos legible por una persona."""
-    if segundos is None:
-        return "sin dato"
-    m = segundos / 60.0
-    if m < 1:
-        return "menos de un minuto"
-    return f"{m:.0f} min" if m >= 1.5 else "1 min"
 
 
 def _retraso_mostrado(segundos: float | None) -> float:
@@ -507,27 +457,27 @@ class AsistenteChat:
                [l for l in self.lineas if _normalizar(l) == _normalizar(codigo)]
 
     # =============================================================== manejadores ===
-    # Cada manejador devuelve (texto, accion). El texto sale SIEMPRE de una
-    # plantilla de este fichero rellenada con datos de la aplicación.
+    # Cada manejador devuelve (texto, accion). El texto sale SIEMPRE de un
+    # redactor de plantillas.py rellenado con datos de la aplicación. El idioma
+    # solo decide qué redactor se usa: los datos y los filtros son los mismos.
 
-    def _h_trayecto(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
+    def _h_trayecto(self, ent: dict, sesion: str,
+                    idioma: str = "es") -> tuple[str, dict | None]:
+        r = plantillas.redactor(idioma)
         origen, cand_o = self._estacion(ent.get("origen"))
         destino, cand_d = self._estacion(ent.get("destino"))
 
         if not ent.get("origen") or not ent.get("destino"):
-            return ("Dime la estación de origen y la de destino y te doy la hora "
-                    "estimada de llegada."), None
+            return r.trayecto_pide_estaciones(), None
         for etiqueta, elegida, candidatas, pedido in (
             ("origen", origen, cand_o, ent.get("origen")),
             ("destino", destino, cand_d, ent.get("destino")),
         ):
             if elegida is None:
                 if not candidatas:
-                    return (f"No encuentro ninguna estación de Cercanías de Madrid "
-                            f"que se llame «{pedido}»."), None
-                nombres = ", ".join(c["nombre"] for c in candidatas[:4])
-                return (f"«{pedido}» puede ser varias estaciones: {nombres}. "
-                        f"¿Cuál es tu {etiqueta}?"), None
+                    return r.estacion_inexistente(pedido), None
+                nombres = [c["nombre"] for c in candidatas[:4]]
+                return r.estacion_ambigua(pedido, nombres, etiqueta), None
 
         t0 = ahora_utc()
         trayectos, aviso = resolver_trayecto(
@@ -543,19 +493,15 @@ class AsistenteChat:
                 trayectos, self.cat, t0
             )
             if fuera_de_dominio and trayectos:
-                nota_dominio = ("\nSolo te doy los trenes que ya circulan o salen en "
-                                "la próxima media hora: son sobre los que puedo "
-                                "predecir.")
+                nota_dominio = r.nota_dominio_parcial()
 
         if not trayectos:
             # Se distingue "no hay tren" de "los hay, pero fuera de mi dominio". El
             # aviso del resolutor ya separa "no hay directo" de "no hay tren a esta
             # hora", y se traslada tal cual: explicar, nunca inventar.
             if fuera_de_dominio:
-                return ("Para ese trayecto no hay ningún tren que ya circule o salga "
-                        "en la próxima media hora, que es hasta donde puedo predecir. "
-                        "Los siguientes salen más tarde."), None
-            return (aviso or "No he encontrado trenes para ese trayecto."), None
+                return r.dominio_vacio(), None
+            return r.sin_trenes(aviso), None
 
         tramos = [t.tramos[0] for t in trayectos[:2]]
         filas = features.construir_filas(
@@ -568,23 +514,23 @@ class AsistenteChat:
         for tramo, fila, pred in zip(tramos, filas, predicciones):
             if contrato.linea_sin_prediccion(tramo.line_id):
                 # Línea fuera del entrenamiento: horario oficial y nada más.
-                lineas_txt.append(
-                    f"· {tramo.line_id} · sale "
-                    f"{formatear_local(tramo.salida_teorica_utc)} y llega a "
-                    f"{destino['nombre']} a las "
-                    f"{formatear_local(tramo.llegada_teorica_utc)} según horario. "
-                    f"No predigo el retraso de esta línea: está excluida del modelo "
-                    f"por obras prolongadas."
-                )
+                lineas_txt.append(r.tren_sin_prediccion(
+                    tramo.line_id,
+                    formatear_local(tramo.salida_teorica_utc),
+                    destino["nombre"],
+                    formatear_local(tramo.llegada_teorica_utc),
+                ))
                 continue
             retraso = _retraso_mostrado(pred.get("delay_s_p50"))
             llegada = tramo.llegada_teorica_utc + timedelta(seconds=retraso)
-            lineas_txt.append(
-                f"· {tramo.line_id} · sale {formatear_local(tramo.salida_teorica_utc)} "
-                f"y llega a {destino['nombre']} a las {formatear_local(llegada)} "
-                f"(horario {formatear_local(tramo.llegada_teorica_utc)}, "
-                f"retraso previsto {_minutos(retraso)})"
-            )
+            lineas_txt.append(r.tren(
+                tramo.line_id,
+                formatear_local(tramo.salida_teorica_utc),
+                destino["nombre"],
+                formatear_local(llegada),
+                formatear_local(tramo.llegada_teorica_utc),
+                retraso,
+            ))
 
         # Se guarda para poder EXPLICAR la predicción después, con los valores
         # reales de la fila y no con una racionalización posterior.
@@ -598,39 +544,33 @@ class AsistenteChat:
         degradados = set()
         for p in predicciones:
             degradados.update(p.get("degraded_blocks") or [])
-        nota = ""
-        if degradados:
-            nota = ("\nAviso: la predicción se ha hecho sin " +
-                    " ni ".join(sorted(degradados)) + ".")
+        nota = r.nota_degradados(degradados) if degradados else ""
 
-        cabecera = f"De {origen['nombre']} a {destino['nombre']}:\n"
+        cabecera = r.cabecera_trayecto(origen["nombre"], destino["nombre"])
         return cabecera + "\n".join(lineas_txt) + nota_dominio + nota, None
 
-    def _h_alertas_red(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
+    def _h_alertas_red(self, ent: dict, sesion: str,
+                       idioma: str = "es") -> tuple[str, dict | None]:
+        r = plantillas.redactor(idioma)
         estado = self.alertas.estado()
         if estado["feed"]["estado"] in ("SIN_DATOS", "CADUCO"):
-            return ("No tengo datos actualizados de incidencias en este momento. "
-                    "La pantalla de alertas muestra el detalle."), None
+            return r.alertas_sin_datos(), None
         activas = [i for i in estado["incidencias"] if i["estado"] == "ACTIVA"]
         if not activas:
-            return "Ahora mismo no hay incidencias activas en la red.", \
+            return r.alertas_red_vacia(), \
                    {"tipo": "navegar", "pantalla": "alertas"}
-        cuerpo = "\n".join(
-            f"· {i['tipo'].replace('_', ' ').capitalize()}"
-            f"{' en ' + ', '.join(i['lineas']) if i['lineas'] else ''}: "
-            f"{_recortar(i['texto'], 160)}"
-            for i in activas[:3]
-        )
-        extra = f"\nY {len(activas) - 3} más." if len(activas) > 3 else ""
-        return (f"Hay {len(activas)} incidencia{'s' if len(activas) > 1 else ''} "
-                f"activa{'s' if len(activas) > 1 else ''}:\n{cuerpo}{extra}"), \
+        filas = [(i["tipo"], i["lineas"], _recortar(i["texto"], 160))
+                 for i in activas[:3]]
+        return r.alertas_red(filas, len(activas)), \
                {"tipo": "sugerir", "pantalla": "alertas",
-                "etiqueta": "Ver todas las incidencias"}
+                "etiqueta": r.etiqueta_ver_incidencias()}
 
-    def _h_alertas_linea(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
+    def _h_alertas_linea(self, ent: dict, sesion: str,
+                         idioma: str = "es") -> tuple[str, dict | None]:
+        r = plantillas.redactor(idioma)
         lineas = self._lineas_de(ent.get("linea"))
         if not lineas:
-            return "Dime qué línea te interesa, de la C1 a la C10.", None
+            return r.alertas_linea_pide(), None
         base = _codigo_base(lineas[0]).upper()
         estado = self.alertas.estado()
         activas = [
@@ -639,18 +579,18 @@ class AsistenteChat:
             and any(_codigo_base(l) == _codigo_base(base) for l in i["lineas"])
         ]
         if not activas:
-            return f"No hay incidencias activas publicadas en la {base}.", None
-        cuerpo = "\n".join(f"· {_recortar(i['texto'], 180)}" for i in activas[:3])
-        plural = "s" if len(activas) > 1 else ""
-        return (f"En la {base} hay {len(activas)} incidencia{plural} "
-                f"activa{plural}:\n{cuerpo}"), \
+            return r.alertas_linea_vacia(base), None
+        textos = [_recortar(i["texto"], 180) for i in activas[:3]]
+        return r.alertas_linea(base, textos, len(activas)), \
                {"tipo": "sugerir", "pantalla": "alertas",
-                "etiqueta": f"Ver incidencias de la {base}"}
+                "etiqueta": r.etiqueta_ver_incidencias_linea(base)}
 
-    def _h_estado_linea(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
+    def _h_estado_linea(self, ent: dict, sesion: str,
+                        idioma: str = "es") -> tuple[str, dict | None]:
+        r = plantillas.redactor(idioma)
         lineas = self._lineas_de(ent.get("linea"))
         if not lineas:
-            return "Dime qué línea quieres consultar, de la C1 a la C10.", None
+            return r.estado_linea_pide(), None
         medias, trenes = [], 0
         for l in lineas:
             datos = self.cache.estado_linea(l) or {}
@@ -659,24 +599,17 @@ class AsistenteChat:
                 trenes += int(datos.get("line_active_trains_30m") or 0)
         base = _codigo_base(lineas[0]).upper()
         if not medias:
-            return (f"No tengo datos recientes de la {base}. Puede que no haya "
-                    f"trenes suyos circulando ahora mismo."), None
+            return r.estado_linea_sin_datos(base), None
         media = sum(medias) / len(medias)
         # La salvedad no es un adorno: con dos trenes, la media de una línea es una
         # anécdota. Decirlo es más honesto que dar la cifra pelada.
-        cautela = ("" if trenes >= MIN_TRENES_REPRESENTATIVO else
-                   " Son pocos trenes, así que la media es poco representativa.")
+        pocos = trenes < MIN_TRENES_REPRESENTATIVO
         # Si se pregunta DIRECTAMENTE por una línea con afectación estructural, la
         # cifra se da igual (es real y es lo que se ha preguntado), pero con su
         # contexto. Aquí no se oculta nada: lo que se evita en el ranking es que
         # esta línea desplace a la que de verdad va mal hoy.
-        if base in LINEAS_ESTRUCTURALES:
-            cautela += (f" Ten en cuenta que la {base} {_motivo_estructural(base)}, "
-                        f"así que ese retraso es habitual y no responde a una "
-                        f"incidencia puntual.")
-        return (f"La {base} acumula un retraso medio de {_minutos(media)} en los "
-                f"últimos 30 minutos, con {trenes} trenes en circulación."
-                f"{cautela}"), None
+        estructural = base in LINEAS_ESTRUCTURALES
+        return r.estado_linea(base, media, trenes, pocos, estructural), None
 
     # Cuántas líneas se nombran en el lado "peor" del ranking. Se pasó de una a
     # tres el 14/09: a la pregunta "¿cuáles son las 3 líneas con mayor retraso?"
@@ -686,7 +619,8 @@ class AsistenteChat:
     # clasificación y, por tanto, sin tocar lo que hace el modelo de lenguaje.
     TOPE_RANKING = 3
 
-    def _h_ranking(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
+    def _h_ranking(self, ent: dict, sesion: str,
+                   idioma: str = "es") -> tuple[str, dict | None]:
         """Las peores líneas y la mejor, AHORA MISMO.
 
         Tres criterios, ninguno cosmético:
@@ -733,9 +667,9 @@ class AsistenteChat:
         }
         escasas = sorted(set(comparables) - set(representativas))
 
+        r = plantillas.redactor(idioma)
         if len(representativas) < 2:
-            return ("No tengo suficientes líneas con trenes en circulación para "
-                    "compararlas ahora mismo. El mapa muestra el detalle."), None
+            return r.ranking_insuficiente(), None
 
         orden = sorted(representativas.items(), key=lambda kv: kv[1][0], reverse=True)
         # Las peores, sin invadir el otro extremo: con pocas líneas comparables,
@@ -745,115 +679,80 @@ class AsistenteChat:
         peores = orden[:n_peores]
         (mejor, (d_mejor, t_mejor)) = orden[-1]
 
-        detalle = ", ".join(
-            f"la {base} con {_minutos(d)} sobre {t} trenes" for base, (d, t) in peores
+        texto = r.ranking(
+            peores=[(base, d, t) for base, (d, t) in peores],
+            mejor=(mejor, d_mejor, t_mejor),
+            comparadas=len(representativas),
+            escasas=escasas,
+            estructurales=estructurales,
+            min_trenes=MIN_TRENES_REPRESENTATIVO,
         )
-        encabezado = (
-            f"Ahora mismo la línea con más retraso medio es {detalle}."
-            if n_peores == 1 else
-            f"Ahora mismo las {n_peores} líneas con más retraso medio en los "
-            f"últimos 30 minutos son: {detalle}."
-        )
+        return texto, {"tipo": "sugerir", "pantalla": "mapa",
+                       "etiqueta": r.etiqueta_ver_mapa()}
 
-        nota = ""
-        if escasas:
-            verbo = "se ha excluido la" if len(escasas) == 1 else "se han excluido las"
-            nota += (f" Además, {verbo} {', '.join(escasas)} por tener menos de "
-                     f"{MIN_TRENES_REPRESENTATIVO} trenes en circulación: con tan "
-                     f"pocos, la media no sería representativa.")
-        if estructurales:
-            motivos = "; ".join(f"la {c}, que {_motivo_estructural(c)}"
-                                for c in estructurales)
-            fuera = "Queda fuera" if len(estructurales) == 1 else "Quedan fuera"
-            nota += (f" {fuera} de la comparación {motivos}: su retraso es una "
-                     f"condición permanente del servicio, no una incidencia de hoy.")
-
-        return (f"{encabezado} La que mejor va es la {mejor}, con "
-                f"{_minutos(d_mejor)} sobre {t_mejor} trenes. Comparadas "
-                f"{len(representativas)} líneas.{nota}"), \
-               {"tipo": "sugerir", "pantalla": "mapa",
-                "etiqueta": "Ver el mapa de la red"}
-
-    def _h_historico(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
+    def _h_historico(self, ent: dict, sesion: str,
+                     idioma: str = "es") -> tuple[str, dict | None]:
         if self.historico is None:
             # Degradación explícita: se dice que no se puede, no se improvisa una
             # cifra a partir de los 30 minutos actuales, que sería otra cosa.
-            return ("Todavía no puedo responder sobre puntualidad histórica: este "
-                    "servicio solo tiene el estado en tiempo real. Puedo decirte qué "
-                    "línea va peor ahora mismo."), None
-        return self.historico.responder(ent.get("linea")), None
+            return plantillas.redactor(idioma).historico_ausente(), None
+        return self.historico.responder(ent.get("linea"), idioma=idioma), None
 
-    def _h_explicar(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
+    def _h_explicar(self, ent: dict, sesion: str,
+                    idioma: str = "es") -> tuple[str, dict | None]:
         """Explica con los VALORES REALES de la fila que entró al modelo.
 
         No es una explicación causal ni una atribución de importancia: es la
         descripción de las entradas con las que se calculó esa predicción. La
         distinción va explícita en la memoria.
         """
+        r = plantillas.redactor(idioma)
         ultima = self._ultima.get(sesion)
         if not ultima:
-            return ("Pregúntame primero por un trayecto y te explico en qué me baso "
-                    "para esa estimación."), None
+            return r.explicar_vacio(), None
         f, pred = ultima["fila"], ultima["pred"]
-        partes = [
-            f"horizonte de {int((f.get('horizon_s') or 0) / 60)} minutos hasta la llegada",
-            ("el tren ya está en circulación" if f.get("regime") == "A"
-             else "el tren aún no ha salido de cabecera"),
-        ]
-        if f.get("line_delay_mean_30m_s") is not None:
-            partes.append(f"retraso medio de la {ultima['linea']} de "
-                          f"{_minutos(float(f['line_delay_mean_30m_s']))} en los "
-                          f"últimos 30 minutos")
         tipos = [t for t in alertas_mod.TIPOS_MODELO
                  if f.get(f"alert_{t.lower()}_30m")]
-        if tipos:
-            partes.append("incidencias de tipo " +
-                          ", ".join(t.lower().replace('_', ' ') for t in tipos))
-        else:
-            partes.append("sin incidencias publicadas en la línea")
-        if f.get("temp_c") is not None:
-            partes.append(f"{float(f['temp_c']):.0f} °C")
-            if (f.get("precip_mm_1h") or 0) > 0:
-                partes.append(f"{float(f['precip_mm_1h']):.1f} mm de lluvia acumulada")
         # La misma cifra acotada que se dio al responder el trayecto. Explicar una
         # estimación distinta de la que se acaba de enseñar sería incoherente
         # dentro de la propia conversación.
         retraso = _retraso_mostrado(pred.get("delay_s_p50"))
-        return ("La estimación de " + _minutos(retraso) + " sale de un modelo "
-                "entrenado con el histórico de la red. Los valores con los que se "
-                "calculó fueron: " + "; ".join(partes) + ". No es una explicación de "
-                "la causa del retraso, sino de los datos de entrada."), None
+        return r.explicar(retraso, f, ultima["linea"], tipos), None
 
-    def _h_sistema(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
+    def _h_sistema(self, ent: dict, sesion: str,
+                   idioma: str = "es") -> tuple[str, dict | None]:
         s = self.fn_salud()
         ctx, pos = s.get("contexto", {}), s.get("posiciones", {})
         al = (s.get("alertas") or {}).get("feed", {})
-        return (f"Estado de las fuentes:\n"
-                f"· Estado de la red: {'al día' if ctx.get('vigente') else 'sin dato vigente'}"
-                f" ({ctx.get('trenes_en_feed', '?')} trenes en el feed)\n"
-                f"· Posiciones: {pos.get('estado', '?')}\n"
-                f"· Incidencias: {al.get('estado', '?')}\n"
-                f"· Modelo: backend {s.get('predictor', {}).get('backend', '?')}"), \
-               None
+        return plantillas.redactor(idioma).sistema(
+            vigente=bool(ctx.get("vigente")),
+            trenes=ctx.get("trenes_en_feed", "?"),
+            posiciones=pos.get("estado", "?"),
+            incidencias=al.get("estado", "?"),
+            backend=s.get("predictor", {}).get("backend", "?"),
+        ), None
 
-    def _h_navegar(self, ent: dict, sesion: str) -> tuple[str, dict | None]:
+    def _h_navegar(self, ent: dict, sesion: str,
+                   idioma: str = "es") -> tuple[str, dict | None]:
+        r = plantillas.redactor(idioma)
         pantalla = ent.get("pantalla")
         if pantalla not in PANTALLAS:
-            return "Puedo llevarte a llegada, alertas o mapa. ¿Cuál quieres?", None
-        # Frases completas y no un diccionario de sustantivos: con "a " + nombre
-        # salía "Te llevo a el mapa".
-        nombres = {
-            "llegada": "Te llevo a la pantalla de llegada estimada.",
-            "alertas": "Te llevo a las incidencias.",
-            "mapa": "Te llevo al mapa de la red.",
-        }
-        return nombres[pantalla], {"tipo": "navegar", "pantalla": pantalla}
+            return r.navegar_pide(), None
+        return r.navegar(pantalla), {"tipo": "navegar", "pantalla": pantalla}
 
     # ==================================================================== fachada ===
     def responder(self, texto: str, ip: str, historial: list[dict] | None = None,
-                  sesion: str | None = None) -> dict[str, Any]:
-        """Punto único de entrada. Nunca lanza: siempre devuelve algo presentable."""
+                  sesion: str | None = None, idioma: str = "es") -> dict[str, Any]:
+        """Punto único de entrada. Nunca lanza: siempre devuelve algo presentable.
+
+        `idioma` lo fija la interfaz, no el texto del usuario. El clasificador
+        recibe la pregunta tal cual en cualquiera de los dos idiomas: las
+        intenciones y las entidades son las mismas, y el prompt de sistema no
+        cambia con el multiidioma.
+        """
         t0 = time.perf_counter()
+        idioma = plantillas.normalizar_idioma(idioma)
+        r = plantillas.redactor(idioma)
         sesion = sesion or "anonima"
         hip = self.hash_ip(ip)
         texto = (texto or "").strip()[:MAX_CARACTERES]
@@ -864,26 +763,26 @@ class AsistenteChat:
             # Registro para la memoria. NO se guarda el texto del usuario: de aquí
             # sale la distribución de intenciones sin guardar lo que escribe nadie.
             log.info(
-                "chat ip=%s intencion=%s bloqueado=%s tokens=%s+%s %.0f ms",
-                hip, intencion, bloqueado,
+                "chat ip=%s idioma=%s intencion=%s bloqueado=%s tokens=%s+%s %.0f ms",
+                hip, idioma, intencion, bloqueado,
                 (uso or {}).get("prompt_tokens", 0),
                 (uso or {}).get("completion_tokens", 0), ms,
             )
             return {"respuesta": resp, "intencion": intencion, "accion": accion,
-                    "sugerencias": SUGERENCIAS if intencion == "AYUDA" else []}
+                    "sugerencias": r.SUGERENCIAS if intencion == "AYUDA" else []}
 
         if not texto:
-            return salida(TEXTO_AYUDA, "AYUDA")
+            return salida(r.AYUDA, "AYUDA")
         if not self.limitador.permitir(hip):
-            return salida(TEXTO_DEMASIADO_RAPIDO, "LIMITADO", bloqueado=True)
+            return salida(r.DEMASIADO_RAPIDO, "LIMITADO", bloqueado=True)
         if not self.presupuesto.consumir():
-            return salida(TEXTO_SIN_CUOTA, "SIN_CUOTA", bloqueado=True)
+            return salida(r.SIN_CUOTA, "SIN_CUOTA", bloqueado=True)
 
         try:
             ent, uso = self._clasificar(texto, historial or [])
         except Exception as exc:  # noqa: BLE001 — degradar, nunca romper
             log.warning("El proveedor no respondió: %s", exc)
-            return salida(TEXTO_DEGRADADO, "DEGRADADO", bloqueado=True)
+            return salida(r.DEGRADADO, "DEGRADADO", bloqueado=True)
 
         intencion = ent["intencion"]
         manejadores = {
@@ -898,17 +797,15 @@ class AsistenteChat:
             "NAVEGAR": self._h_navegar,
         }
         if intencion == "AYUDA":
-            return salida(TEXTO_AYUDA, "AYUDA", uso=uso)
+            return salida(r.AYUDA, "AYUDA", uso=uso)
         if intencion not in manejadores:
-            return salida(TEXTO_FUERA, "FUERA_DE_ALCANCE", uso=uso)
+            return salida(r.FUERA, "FUERA_DE_ALCANCE", uso=uso)
 
         try:
-            respuesta, accion = manejadores[intencion](ent, sesion)
+            respuesta, accion = manejadores[intencion](ent, sesion, idioma)
         except Exception:  # noqa: BLE001
             log.exception("Fallo componiendo la respuesta de %s", intencion)
-            return salida("No he podido consultar ese dato ahora mismo. "
-                          "Las pantallas de la aplicación siguen disponibles.",
-                          intencion, bloqueado=True, uso=uso)
+            return salida(r.FALLO_COMPONER, intencion, bloqueado=True, uso=uso)
         return salida(respuesta, intencion, accion, uso=uso)
 
     def diagnostico(self) -> dict[str, Any]:

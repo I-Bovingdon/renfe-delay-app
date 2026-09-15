@@ -15,7 +15,14 @@ TFM Cercanías RENFE · UCM · 2026
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+# Idioma de la INTERFAZ. Lo fija el selector de la página, nunca el texto que escribe
+# el usuario. Por defecto español: una página antigua en caché que no envíe el campo
+# sigue funcionando exactamente igual que antes del multiidioma.
+Idioma = Literal["es", "en"]
 
 
 class Estacion(BaseModel):
@@ -36,6 +43,7 @@ class ConsultaTrayecto(BaseModel):
         description="Instante ISO-8601 UTC a partir del cual se quiere salir. "
                     "Si se omite, se usa el momento actual.",
     )
+    idioma: Idioma = Field("es", description="Idioma de los avisos de la respuesta.")
 
 
 class Retraso(BaseModel):
@@ -128,3 +136,4 @@ class ConsultaChat(BaseModel):
                     "para poder explicar la última predicción; no identifica a nadie.",
     )
     historial: list[MensajeChat] = Field(default_factory=list, max_length=4)
+    idioma: Idioma = Field("es", description="Idioma en que se redacta la respuesta.")

@@ -1418,3 +1418,45 @@ body {
     max-height: calc(100vh - var(--u) * 8);
   }
 }
+
+/* --- Selector de idioma ----------------------------------------------------
+   Va en la fila del título y no en la de las pestañas: en un móvil de 360 px
+   la fila de navegación ya va justa con el logo, tres pestañas y el contador.
+   El activo se marca con aria-pressed, que es lo que lee un lector de pantalla. */
+.cabecera__titulo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--u);
+}
+.idioma {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 1px solid var(--niebla);
+  border-radius: 999px;
+  background: var(--carta);
+}
+.idioma__opcion {
+  padding: 3px 9px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--gris);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.idioma__opcion:hover { color: var(--tinta); }
+.idioma__opcion[aria-pressed="true"] {
+  background: var(--tinta);
+  color: #fff;
+  cursor: default;
+}
+.idioma__opcion:focus-visible {
+  outline: 2px solid var(--linea);
+  outline-offset: 1px;
+}

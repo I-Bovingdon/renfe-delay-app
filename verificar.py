@@ -57,9 +57,50 @@ def comprobar(descripcion: str, condicion: bool, detalle: str = "") -> None:
         fallos.append(descripcion)
 
 
+def claves_de_bloque(i18n: str, inicio: str, fin: str) -> set[str]:
+    """Claves de un bloque de idioma de i18n.js, delimitado por sus comentarios."""
+    bloque = i18n.split(f"// ---- {inicio} ----", 1)[1].split(f"// ---- {fin} ----", 1)[0]
+    return set(re.findall(r'^\s*"([\w.]+)":', bloque, flags=re.MULTILINE))
+
+
+def comprobar_idiomas(html: str, js: str, i18n: str) -> None:
+    """Un texto sin traducir no rompe la página (t() devuelve la clave), pero se ve
+    en pantalla. Estas comprobaciones lo detectan antes de desplegar."""
+    es = claves_de_bloque(i18n, "ES", "EN")
+    en = claves_de_bloque(i18n, "EN", "FIN")
+    comprobar(f"español e inglés tienen las mismas {len(es)} claves", es == en,
+              f"solo ES: {sorted(es - en)} · solo EN: {sorted(en - es)}")
+
+    # Claves literales que usa app.js: t("x") y cadenas con forma de clave
+    # (las que se eligen con un ternario antes de llamar a t).
+    prefijos = {c.split(".")[0] for c in es}
+    usadas_js = {c for c in re.findall(r'"([a-z]+\.[\w.]+)"', js)
+                 if c.split(".")[0] in prefijos}
+    faltan = sorted(usadas_js - es)
+    comprobar(f"las {len(usadas_js)} claves que usa app.js existen", not faltan,
+              f"faltan: {faltan}")
+
+    usadas_html = set(re.findall(r'data-i18n(?:-[a-z-]+)?="([^"]+)"', html))
+    faltan = sorted(usadas_html - es)
+    comprobar(f"las {len(usadas_html)} claves que usa index.html existen", not faltan,
+              f"faltan: {faltan}")
+
+    # Claves que app.js compone en tiempo de ejecución a partir de códigos de la
+    # API. Si la API añade un tipo de incidencia, tiene que añadirse aquí.
+    alertas_py = (API / "alertas.py").read_text(encoding="utf-8")
+    bloque = alertas_py.split("IMPACTO_POR_TIPO = {", 1)[1].split("}", 1)[0]
+    tipos = set(re.findall(r'"([A-Z_]+)":', bloque))
+    impactos = set(re.findall(r'"([A-Z_]+)"\s*,?\s*(?:#.*)?$', bloque, flags=re.MULTILINE))
+    dinamicas = {f"tipo.{x}" for x in tipos} | {f"impacto.{x}" for x in impactos}
+    faltan = sorted(dinamicas - es)
+    comprobar(f"los {len(tipos)} tipos y {len(impactos)} impactos de la API tienen texto",
+              not faltan, f"faltan: {faltan}")
+
+
 def main() -> int:
     html = (WEB / "index.html").read_text(encoding="utf-8")
     js = (WEB / "app.js").read_text(encoding="utf-8")
+    i18n = (WEB / "i18n.js").read_text(encoding="utf-8")
     css = (WEB / "estilos.css").read_text(encoding="utf-8")
 
     print("Coherencia HTML <-> JavaScript")
@@ -79,14 +120,20 @@ def main() -> int:
         comprobar(f'el contenedor L.map("{objetivo.group(1)}") existe',
                   objetivo.group(1) in ids_html)
 
-    # 3. Orden de carga: app.js referencia L al construir el mapa.
+    # 3. Orden de carga: app.js referencia L al construir el mapa y usa t() de
+    #    i18n.js desde la primera línea que pinta texto.
     i_lib, i_app = html.find("leaflet.js"), html.find('src="app.js"')
+    i_i18n = html.find('src="i18n.js"')
     comprobar("leaflet.js se carga antes que app.js", 0 < i_lib < i_app)
+    comprobar("i18n.js se carga antes que app.js", 0 < i_i18n < i_app)
     comprobar("leaflet.css está enlazado", "leaflet.css" in html)
 
     # 4. El botón de Mapa no puede quedarse deshabilitado tras activar la pantalla.
     comprobar("el botón de Mapa está habilitado",
               'data-pantalla="mapa" type="button" disabled' not in html)
+
+    print("\nIdiomas")
+    comprobar_idiomas(html, js, i18n)
 
     print("\nCoherencia JavaScript <-> CSS")
     sin_estilo = sorted(c for c in CLASES_GENERADAS if f".{c}" not in css)
@@ -113,12 +160,13 @@ def main() -> int:
             comprobar("el PNG del logo descomprime entero", False, str(exc))
 
     print("\nSintaxis")
-    try:
-        r = subprocess.run(["node", "--check", str(WEB / "app.js")],
-                           capture_output=True, text=True)
-        comprobar("app.js", r.returncode == 0, r.stderr.strip()[:200])
-    except FileNotFoundError:
-        print("  [salta] app.js — node no está instalado en esta máquina")
+    for nombre in ("i18n.js", "app.js"):
+        try:
+            r = subprocess.run(["node", "--check", str(WEB / nombre)],
+                               capture_output=True, text=True)
+            comprobar(nombre, r.returncode == 0, r.stderr.strip()[:200])
+        except FileNotFoundError:
+            print(f"  [salta] {nombre} — node no está instalado en esta máquina")
 
     for fichero in sorted(API.glob("*.py")) if API.is_dir() else []:
         try:

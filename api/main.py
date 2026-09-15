@@ -46,6 +46,7 @@ import chat as chat_mod
 import features
 import historico as historico_mod
 import meteo as meteo_mod
+import plantillas
 from catalogo import Catalogo
 from estado_red import INTERVALO_REFRESCO_S, CacheContexto
 from fuente_raw import FuenteRaw
@@ -300,8 +301,13 @@ def listar_lineas():
 
 @app.post("/api/consulta", response_model=RespuestaConsulta)
 def consultar(peticion: ConsultaTrayecto):
-    """Resuelve un trayecto y devuelve los trenes candidatos con su predicción."""
+    """Resuelve un trayecto y devuelve los trenes candidatos con su predicción.
+
+    Los avisos se componen en español y se traducen al devolverlos (plantillas.py).
+    Así la lógica que decide CUÁNDO avisar no depende del idioma.
+    """
     inicio = time.perf_counter()
+    r = plantillas.redactor(peticion.idioma)
     cat = _cat()
     cache: CacheContexto = estado["cache"]  # type: ignore[assignment]
     predictor: Predictor = estado["predictor"]  # type: ignore[assignment]
@@ -309,7 +315,7 @@ def consultar(peticion: ConsultaTrayecto):
     origen = cat.estacion(peticion.origen)
     destino = cat.estacion(peticion.destino)
     if origen is None or destino is None:
-        raise HTTPException(status_code=404, detail="Estación no encontrada.")
+        raise HTTPException(status_code=404, detail=r.aviso("Estación no encontrada."))
 
         # Una fecha mal formada es culpa de quien llama, no un fallo del servidor: 400, no 500.
     try:
@@ -317,8 +323,8 @@ def consultar(peticion: ConsultaTrayecto):
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
-            detail="Formato de fecha no válido. Se espera ISO-8601 UTC, "
-                   "por ejemplo 2026-09-18T07:30:00Z.",
+            detail=r.aviso("Formato de fecha no válido. Se espera ISO-8601 UTC, "
+                           "por ejemplo 2026-09-18T07:30:00Z."),
         ) from exc
     request_id = str(uuid.uuid4())
 
@@ -347,7 +353,7 @@ def consultar(peticion: ConsultaTrayecto):
             consultado_en_utc=iso_utc(t0),
             gtfs_version=cat.gtfs_version,
             opciones=[],
-            aviso=aviso,
+            aviso=r.aviso(aviso),
         )
 
     # Un tramo por trayecto mientras solo haya directos. Cuando entren los transbordos,
@@ -365,7 +371,7 @@ def consultar(peticion: ConsultaTrayecto):
         log.warning("El modelo no respondió (%s)", exc)
         raise HTTPException(
             status_code=503,
-            detail="El servicio de predicción no está disponible en este momento.",
+            detail=r.aviso("El servicio de predicción no está disponible en este momento."),
         ) from exc
 
     # Las predicciones vuelven en el MISMO orden en que se enviaron las filas, así que
@@ -448,7 +454,7 @@ def consultar(peticion: ConsultaTrayecto):
         consultado_en_utc=iso_utc(t0),
         gtfs_version=cat.gtfs_version,
         opciones=opciones,
-        aviso=aviso,
+        aviso=r.aviso(aviso),
     )
 
 
@@ -587,6 +593,7 @@ def conversar(peticion: ConsultaChat, request: Request):
         ip=ip,
         historial=[m.model_dump() for m in peticion.historial],
         sesion=peticion.sesion,
+        idioma=peticion.idioma,
     )
     # no-store por el mismo motivo que en /api/mapa: una respuesta cacheada sobre
     # el estado de la red es una respuesta falsa un minuto después.
