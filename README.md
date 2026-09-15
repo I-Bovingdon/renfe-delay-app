@@ -30,8 +30,10 @@ las 24 horas desde junio de 2026.
 |---|---|---|
 | ![Alertas](docs/img/alertas.png) | ![Mapa](docs/img/mapa.png) | ![Asistente](docs/img/asistente.png) |
 
-La interfaz está en español y en inglés. Los nombres de estación y el texto de las
-incidencias no se traducen: son datos del operador.
+La interfaz está en español y en inglés, con un selector en la cabecera. Los nombres de
+estación y el texto de las incidencias no se traducen: son datos del operador.
+
+<img src="docs/img/llegada_en.png" alt="Interfaz en inglés" width="360">
 
 ---
 
