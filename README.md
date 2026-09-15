@@ -89,7 +89,7 @@ Decisiones de fondo:
 | Repositorio | Contenido |
 |---|---|
 | **renfe-delay-app** (este) | API, interfaz web, asistente, pruebas y despliegue |
-| [Renfe-delay-prediction-pipeline](https://github.com/I-Bovingdon/Renfe-delay-prediction-pipeline) | Captura 24/7 de Renfe y AEMET, compactación a Parquet, copia de seguridad y referencias GTFS |
+| [renfe-delay-pipeline](https://github.com/I-Bovingdon/renfe-delay-pipeline) | Captura 24/7 de Renfe y AEMET, compactación a Parquet, copia de seguridad y referencias GTFS |
 
 ---
 
