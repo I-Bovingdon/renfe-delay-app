@@ -218,18 +218,24 @@ __marimo__/
 .streamlit/secrets.toml
 
 modelo/
+*.pkl
 
-# Catalogo generado por el cron, 12 MB, no versionar
+# Catálogo generado por el cron (12 MB). El bueno vive en datos/
 datos/catalogo.json
 datos/catalogo_*.json
-datos/*.bak
-
-# Copias de seguridad locales, nunca versionadas
-api/_old_*/
-
-# Copias de seguridad locales, nunca versionadas
-api/_old_*/
-
 datos/catalogo.json.anterior
-
+datos/*.bak
 datos/puntualidad.json
+# Copia huérfana antigua en la raíz, no la lee ningún módulo
+/catalogo.json
+
+# Copias de seguridad locales, nunca versionadas
+api/_old_*/
+web/_old*/
+web/_pre_old/
+
+# Material de la memoria: vive fuera del repo de la app
+figuras/
+validacion/
+*.ipynb
+/*.csv
