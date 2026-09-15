@@ -45,8 +45,27 @@
     <h1 class="titulo" id="titulo-pantalla" data-i18n="titulo.llegada">Llegada estimada</h1>
     <!-- Selector de idioma. Por defecto español; ver la cabecera de i18n.js. -->
     <div class="idioma" role="group" aria-label="Idioma" data-i18n-aria-label="idioma.grupo">
-      <button class="idioma__opcion" data-idioma="es" type="button" lang="es">ES</button>
-      <button class="idioma__opcion" data-idioma="en" type="button" lang="en">EN</button>
+      <!-- Banderas en SVG y no en emoji: Windows no dibuja los emojis de bandera
+           y enseña las letras sueltas. Son decorativas (aria-hidden): quien usa un
+           lector de pantalla oye el código del idioma, que es lo que se elige. -->
+      <button class="idioma__opcion" data-idioma="es" type="button" lang="es">
+        <svg class="bandera" viewBox="0 0 750 500" aria-hidden="true" focusable="false">
+          <rect width="750" height="500" fill="#AA151B"/>
+          <rect y="125" width="750" height="250" fill="#F1BF00"/>
+        </svg>ES
+      </button>
+      <button class="idioma__opcion" data-idioma="en" type="button" lang="en">
+        <svg class="bandera" viewBox="0 0 60 30" preserveAspectRatio="xMidYMid slice"
+             aria-hidden="true" focusable="false">
+          <clipPath id="bandera-uk-diagonal"><path d="M30 15h30v15zv15H0zH0V0zV0h30z"/></clipPath>
+          <path d="M0 0v30h60V0z" fill="#012169"/>
+          <path d="M0 0l60 30m0-30L0 30" stroke="#fff" stroke-width="6"/>
+          <path d="M0 0l60 30m0-30L0 30" clip-path="url(#bandera-uk-diagonal)"
+                stroke="#C8102E" stroke-width="4"/>
+          <path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/>
+          <path d="M30 0v30M0 15h60" stroke="#C8102E" stroke-width="6"/>
+        </svg>EN
+      </button>
     </div>
   </div>
 </header>

@@ -1438,6 +1438,9 @@ body {
   background: var(--carta);
 }
 .idioma__opcion {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 3px 9px;
   border: 0;
   border-radius: 999px;
@@ -1459,4 +1462,19 @@ body {
 .idioma__opcion:focus-visible {
   outline: 2px solid var(--linea);
   outline-offset: 1px;
+}
+
+/* Bandera del botón de idioma. Mismo tamaño para las dos: la británica se
+   recorta (slice) en vez de deformarse. El borde fino separa el blanco de la
+   Union Jack del fondo claro. */
+.bandera {
+  width: 18px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(16, 24, 38, 0.18);
+}
+/* En el botón activo (fondo oscuro) el borde se aclara para que se vea. */
+.idioma__opcion[aria-pressed="true"] .bandera {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
