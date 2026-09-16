@@ -21,7 +21,7 @@ las 24 horas desde junio de 2026.
 
 | Pantalla | Para qué sirve |
 |---|---|
-| **Llegada** | Eliges origen y destino y ves los próximos trenes directos con su hora de llegada estimada y el margen en el que se espera cada uno |
+| **Llegada** | Eliges origen y destino y ves los próximos trenes directos con su hora de llegada estimada |
 | **Alertas** | Incidencias del día clasificadas por tipo e impacto, separando las activas de las ya resueltas y filtrables por línea |
 | **Mapa** | Posición de los trenes en circulación sobre el trazado de las líneas, con su retraso publicado |
 | **Asistente** | Preguntas en lenguaje natural sobre trayectos, incidencias o el estado de una línea |
@@ -114,7 +114,9 @@ media, que queda muy por encima del tren típico. Se descartó por medición.
 
 ## Validación en producción
 
-Se contrastaron 548 predicciones reales con la llegada observada de cada tren.
+Las predicciones que sirvió la aplicación se contrastaron con la última estimación de
+llegada que Renfe publicó para la parada de destino. Primera medición, domingo 13/09:
+548 predicciones de 65 trenes.
 
 | Medida | Valor |
 |---|---|
@@ -130,19 +132,33 @@ conjunto de prueba, el error pasa de 98 s en los primeros 15 minutos a 270 s por
 una hora, cifra comparable a la de producción.
 
 **Corrección aplicada:** la aplicación solo predice trenes que ya circulan o salen en los
-próximos 30 minutos, y lo declara en la interfaz. El error de producción tras este cambio
-no se ha vuelto a medir con una muestra comparable.
+próximos 30 minutos, y lo declara en la interfaz. El 15/09 se desplegó además un modelo
+reentrenado.
 
-<!-- FIGURA PENDIENTE: exportar del cuaderno de validación la que mejor muestre el
-     error según el horizonte, guardarla como docs/img/error_por_horizonte.png y
-     sustituir este comentario por:
-     ![Error por horizonte](docs/img/error_por_horizonte.png) -->
+**Segunda medición, martes 15/09 en hora punta**, con los mismos seis trayectos y solo el
+instante presente, como la aplicación: 304 predicciones de 50 trenes.
+
+| Predictor, sobre la misma muestra | MAE |
+|---|---|
+| Modelo | 6,18 min |
+| Siempre 4 min | 6,58 min |
+| Horario oficial | 9,08 min |
+
+El modelo supera a las dos reglas, aunque por poco a la de 4 minutos, y desaparecen las
+predicciones negativas. **Sigue sin anticipar los retrasos altos:** la dispersión del
+retraso real es 4,8 veces la del predicho, y en los trenes que ya circulaban el modelo
+predijo menos retraso del real en todos los casos. Los errores de los dos días no se
+comparan entre sí: cambian el día, el nivel de retraso y el modelo.
+
+![Validación del 15/09](docs/validacion/f6_validacion_15sep.png)
+
+Datos, cuadernos y figuras: [`docs/validacion/`](docs/validacion/).
 
 Otras comprobaciones hechas con datos antes de tocar código:
 
 - **Dirección de los trenes en el mapa.** El feed no publica rumbo. Se derivó del tramo de
   vía entre estaciones y se validó contra el desplazamiento real de 24 trenes: desviación
-  mediana de 13°, frente a 174° de la primera versión, que apuntaba hacia la estación ya
+  mediana de 13°, frente a 173° de la primera versión, que apuntaba hacia la estación ya
   dejada.
 - **Columnas de eventos vacías en servicio.** Su ganancia en el modelo es prácticamente
   nula, así que no afectan a la predicción.
@@ -217,7 +233,9 @@ desde disco, así que un cambio de interfaz se publica con un `git pull`.
 - **Histórico de verano.** Los datos empiezan en junio, así que el efecto de la lluvia está
   poco representado.
 - **La clasificación de incidencias usa expresiones regulares**, no un modelo de lenguaje.
-- **Horizonte de 30 minutos.** Es el dominio del entrenamiento; más allá no se predice.
+- **Antelación máxima de 30 minutos sobre la salida del tren.** Es el dominio del
+  entrenamiento; más allá no se predice.
+- **La predicción es puntual.** El modelo desplegado no da un intervalo de confianza.
 
 ## Equipo
 
