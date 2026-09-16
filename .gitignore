@@ -239,3 +239,8 @@ figuras/
 validacion/
 *.ipynb
 /*.csv
+
+# Excepcion: material publicado de la validacion en produccion (Anexo I)
+!docs/validacion/
+!docs/validacion/figuras/
+!docs/validacion/*.ipynb
