@@ -241,9 +241,6 @@ desde disco, así que un cambio de interfaz se publica con un `git pull`.
 
 Ainhoa, Carlos, Jimena, Patricia, Rubén e Ismael.
 
-- **Infraestructura, pipeline de captura, aplicación web y este repositorio:** Ismael Bovingdon.
-- **Modelado:** Patricia.
-
 Tutores: Carlos Ortega y Santiago Mota.
 
 ## Licencia y fuentes
