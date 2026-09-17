@@ -307,21 +307,25 @@
   <p data-i18n="pie.tfm">Trabajo Fin de Máster · Data Science, Big Data &amp; Business Analytics · UCM</p>
 
   <!-- ===================== ENLACE AL PANEL DE ANÁLISIS =====================
-       WEB-HOLDER: sustituye la cadena WEB-HOLDER del atributo href por la URL
-       definitiva del panel de Power BI que entregue Carlos. Es el ÚNICO sitio
-       que hay que tocar; no hace falta cambiar nada más ni reiniciar el
-       servicio, porque los ficheros de web/ se sirven desde disco.
+       Abre en una pestaña nueva el informe del panel de Power BI exportado a
+       PDF (web/informes/). El panel no tiene publicación web, así que se
+       entrega como documento estático servido por la propia aplicación.
 
-       Mientras el href siga valiendo WEB-HOLDER, app.js oculta el enlace: es
-       preferible que no aparezca a que aparezca y lleve a ninguna parte.
+       Para sustituir el informe basta con reemplazar el fichero PDF con el
+       mismo nombre: no hace falta tocar este HTML ni reiniciar el servicio,
+       porque los ficheros de web/ se sirven desde disco.
+
+       app.js solo muestra el enlace si el href es una URL http(s) completa,
+       por eso se usa la dirección absoluta del dominio.
 
        El rel="noopener noreferrer" no es decorativo. Sin él, la página de
        destino puede manipular esta a través de window.opener, y además se le
        envía la URL de procedencia en la cabecera Referer.                   -->
   <p class="pie__enlaces">
-    <a class="pie__enlace" id="enlace-analisis" href="WEB-HOLDER"
-       target="_blank" rel="noopener noreferrer" hidden data-i18n="pie.analisis">
-      Análisis histórico de retrasos
+    <a class="pie__enlace" id="enlace-analisis"
+       href="https://cercanias-madrid.es/informes/analisis_retrasos_power_bi.pdf"
+       target="_blank" rel="noopener noreferrer" type="application/pdf" data-i18n="pie.analisis">
+      Análisis histórico de retrasos (PDF)
     </a>
   </p>
 

@@ -148,7 +148,7 @@ const TEXTOS = {
     "chat.sug_4": "¿Qué puedes hacer?",
 
     "pie.tfm": "Trabajo Fin de Máster · Data Science, Big Data & Business Analytics · UCM",
-    "pie.analisis": "Análisis histórico de retrasos",
+    "pie.analisis": "Análisis histórico de retrasos (PDF)",
     "pie.alcance_aria": "Alcance de la predicción",
     "pie.alcance": "Se muestran los trenes que ya circulan o salen en los próximos 30\u00a0minutos. Es el margen con el que se entrenó el modelo. Más allá, la predicción no sería fiable.",
     "pie.version": "Horarios GTFS · versión {v}",
@@ -278,7 +278,7 @@ const TEXTOS = {
     "chat.sug_4": "What can you do?",
 
     "pie.tfm": "Master's Thesis · Data Science, Big Data & Business Analytics · UCM",
-    "pie.analisis": "Historical delay analysis",
+    "pie.analisis": "Historical delay analysis (PDF, in Spanish)",
     "pie.alcance_aria": "Prediction scope",
     "pie.alcance": "Only trains that are already running or depart within the next 30\u00a0minutes are shown. That is the window the model was trained on. Beyond it, the prediction would not be reliable.",
     "pie.version": "GTFS timetable · version {v}",
