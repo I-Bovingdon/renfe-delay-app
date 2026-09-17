@@ -306,29 +306,6 @@
 <footer class="pie">
   <p data-i18n="pie.tfm">Trabajo Fin de Máster · Data Science, Big Data &amp; Business Analytics · UCM</p>
 
-  <!-- ===================== ENLACE AL PANEL DE ANÁLISIS =====================
-       Abre en una pestaña nueva el informe del panel de Power BI exportado a
-       PDF (web/informes/). El panel no tiene publicación web, así que se
-       entrega como documento estático servido por la propia aplicación.
-
-       Para sustituir el informe basta con reemplazar el fichero PDF con el
-       mismo nombre: no hace falta tocar este HTML ni reiniciar el servicio,
-       porque los ficheros de web/ se sirven desde disco.
-
-       app.js solo muestra el enlace si el href es una URL http(s) completa,
-       por eso se usa la dirección absoluta del dominio.
-
-       El rel="noopener noreferrer" no es decorativo. Sin él, la página de
-       destino puede manipular esta a través de window.opener, y además se le
-       envía la URL de procedencia en la cabecera Referer.                   -->
-  <p class="pie__enlaces">
-    <a class="pie__enlace" id="enlace-analisis"
-       href="https://cercanias-madrid.es/informes/analisis_retrasos_power_bi.pdf"
-       target="_blank" rel="noopener noreferrer" type="application/pdf" data-i18n="pie.analisis">
-      Análisis histórico de retrasos (PDF)
-    </a>
-  </p>
-
   <!-- El boton (i) va en la MISMA linea que la version, delante de ella. Vive en
        su propio <span> y no dentro de #pie-version porque app.js reescribe el
        textContent de ese parrafo al cargar el catalogo, lo que borraria el boton.
@@ -350,6 +327,30 @@
     </span>
     <p class="pie__dato" id="pie-version"></p>
   </div>
+  <!-- ===================== ENLACE AL PANEL DE ANÁLISIS =====================
+       Abre en una pestaña nueva el informe del panel de Power BI exportado a
+       PDF (web/informes/). El panel no tiene publicación web, así que se
+       entrega como documento estático servido por la propia aplicación.
+
+       Para sustituir el informe basta con reemplazar el fichero PDF con el
+       mismo nombre: no hace falta tocar este HTML ni reiniciar el servicio,
+       porque los ficheros de web/ se sirven desde disco.
+
+       app.js solo muestra el enlace si el href es una URL http(s) completa,
+       por eso se usa la dirección absoluta del dominio.
+
+       El rel="noopener noreferrer" no es decorativo. Sin él, la página de
+       destino puede manipular esta a través de window.opener, y además se le
+       envía la URL de procedencia en la cabecera Referer.
+
+       Va al final del pie, debajo de la versión del horario.                -->
+  <p class="pie__enlaces">
+    <a class="pie__enlace" id="enlace-analisis"
+       href="https://cercanias-madrid.es/informes/analisis_retrasos_power_bi.pdf"
+       target="_blank" rel="noopener noreferrer" type="application/pdf" data-i18n="pie.analisis">
+      Análisis histórico de retrasos (PDF)
+    </a>
+  </p>
 </footer>
 
 <!-- Orden de carga: Leaflet y i18n.js van ANTES que app.js. app.js referencia L
